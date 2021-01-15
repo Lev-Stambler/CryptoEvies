@@ -5,7 +5,7 @@ const EvieCoin = artifacts.require("./EvieCoin.sol");
 const { time } = require("@openzeppelin/test-helpers");
 
 contract("EvieCoin", function (accounts) {
-  let [aliceOwner, goodStudentBob, badStudentJimbo] = accounts;
+  let [aliceOwner, teacherGeorgina, goodStudentBob, badStudentJimbo] = accounts;
   let instance
   beforeEach(async () => {
     instance = await EvieCoin.deployed();
@@ -54,8 +54,6 @@ contract("EvieCoin", function (accounts) {
       assert.equal(result.toString(), web3.utils.toWei("0"));
     });
   });
-
-  context("A student makes does not make their objective", async () => {});
 
   xcontext("Check edge cases/ faulty sends", async () => {
     xit("Only one clock out can be made per day", async () => {});

@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 
-// Dai addr 0x6B175474E89094C44Da98b954EedeAC495271d0F
+// TODO: add an event emit for start time which is listened to on the front end. 
+// TODO: find way to incroperate an oracle
+
 contract EvieCoin is ERC20, Ownable {
     using SafeMath for uint256;
     using SafeMath for uint;
@@ -29,11 +31,13 @@ contract EvieCoin is ERC20, Ownable {
     }
 
 // TODO only one per day
-    function clockStartTime() public {
+    /// @return start time
+    function clockStartTime() public returns(uint) {
         clock_in_times[msg.sender] = block.timestamp;
+        return clock_in_times[msg.sender];
     }
 
-    // Not exact, it is off by a few minutes
+    // Not exact, it is off by a few minutes?
     function clockEndTime() public _once_per_day {
         uint end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
