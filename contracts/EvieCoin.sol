@@ -20,7 +20,7 @@ contract EvieCoin is ERC20, Ownable {
 
     constructor(uint256 initialSupply) ERC20("EvieCOIN", "EVE") {
         transferOwnership(msg.sender);
-        _mint(msg.sender, initialSupply);
+        _mint(msg.sender, initialSupply * (10 ** decimals()));
     }
 
     modifier _once_per_day() {
@@ -28,19 +28,18 @@ contract EvieCoin is ERC20, Ownable {
         _;
     }
 
-    function _timeToDayFromUTC() public {
-        // Rounds to zero
-    }
-
+// TODO only one per day
     function clockStartTime() public {
         clock_in_times[msg.sender] = block.timestamp;
     }
 
+    // Not exact, it is off by a few minutes
     function clockEndTime() public _once_per_day {
         uint end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
         if (end_time.sub(clock_in_times[msg.sender]) <= 1 hours) {
-            _payout(msg.sender, 1);
+            // Payout one full coin
+            _payout(msg.sender, 1 * (10 ** decimals()));
         }
         last_clock_out_day[msg.sender] = uint16(block.timestamp.div(1 days));
     }
