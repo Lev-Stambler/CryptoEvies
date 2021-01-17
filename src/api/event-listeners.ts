@@ -1,4 +1,5 @@
 import { ethTimestampToDate } from "../env/time";
+import { weiToCoinNumber } from "../utils/currency";
 import { UserInfoStore } from "./init";
 
 function wrapper(f: Function) {
@@ -36,7 +37,7 @@ function _clockInListener(event) {
 }
 
 function _payoutListener(event) {
-  const {value} = event.returnValues
+  const {value} = weiToCoinNumber(event.returnValues)
   alert(`You just got paid out ${value}`)
 }
 

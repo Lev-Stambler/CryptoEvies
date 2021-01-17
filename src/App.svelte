@@ -5,6 +5,7 @@
   import { constants } from "./env/constants";
   import { APIStore, initEvieCoin, UserInfoStore } from "./api/init";
   import type { IAPIStore, IUserInfo } from "./api/interfaces";
+  import { weiToCoinNumber } from "./utils/currency";
 
   let storageValue: any;
   let connected = false;
@@ -34,7 +35,7 @@
   {#if connected}
     <div class="row">
       <div class="col-8">
-        <p>Your current balance: {$UserInfoStore.bal}</p>
+        <p>Your current balance: {weiToCoinNumber($UserInfoStore.bal)}</p>
       </div>
     </div>
     <div class="row">
