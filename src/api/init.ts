@@ -1,21 +1,27 @@
 import { writable } from "svelte/store";
 import EvieCoinContract from "../../build/contracts/EvieCoin.json";
 import { ethTimestampToDate } from "../env/time";
-import { clockInListener, clockOutListener } from "./event-listeners";
+import {
+  clockInListener,
+  clockOutListener,
+  payoutListener,
+} from "./event-listeners";
 import type { IAPIStore, IUserInfo } from "./interfaces";
 
-export const APIWriteable = writable({
+const APIWriteable = writable({
   EvieCoin: undefined,
   address: "",
 } as IAPIStore);
-export const UserInfoWriteable = writable({} as Partial<IUserInfo>);
+const UserInfoWriteable = writable({} as Partial<IUserInfo>);
 
 export const APIStore = {
   subscribe: APIWriteable.subscribe,
+  update: APIWriteable.update,
 };
 
 export const UserInfoStore = {
   subscribe: UserInfoWriteable.subscribe,
+  update: APIWriteable.update,
 };
 
 export async function initEvieCoin(web3) {
@@ -24,8 +30,8 @@ export async function initEvieCoin(web3) {
 
 APIWriteable.subscribe(async (api) => {
   if (api.EvieCoin) {
-    await setEventListeners(api.EvieCoin, api.address);
     const proms = [
+      setEventListeners(api.EvieCoin, api.address),
       loadInitClockIn(api.EvieCoin, api.address),
       loadInitClockOut(api.EvieCoin, api.address),
     ];
@@ -62,14 +68,11 @@ async function loadBlockchainData(web3) {
 }
 
 async function loadInitClockIn(evieCoin, address) {
-  let startTime: Date;
   try {
-    const pastevents = await evieCoin.getPastEvents("ClockInTimeEvent", {
-      user: address,
-    });
-    const mostRecent = pastevents[pastevents.length - 1];
-    // Date is returned in seconds, needs to be changed to millis
-    startTime = ethTimestampToDate(mostRecent.returnValues.timestamp);
+    console.log(address, evieCoin)
+    const startTimeEth = await evieCoin.methods.clock_in_times(address).call()
+    const startTime = ethTimestampToDate(startTimeEth);
+    console.log(startTime)
     UserInfoWriteable.update((u) => {
       return {
         ...u,
@@ -88,6 +91,7 @@ async function loadInitClockOut(evieCoin, address) {
     const pastevents = await evieCoin.getPastEvents("ClockOutTimeEvent", {
       user: address,
     });
+    if (pastevents.length === 0) return;
     const mostRecent = pastevents[pastevents.length - 1];
     // Date is returned in seconds, needs to be changed to millis
     endTime = ethTimestampToDate(mostRecent.returnValues.timestamp);
@@ -106,4 +110,5 @@ async function loadInitClockOut(evieCoin, address) {
 async function setEventListeners(evieCoin, address) {
   evieCoin.events.ClockInTimeEvent({ user: address }, clockInListener);
   evieCoin.events.ClockOutTimeEvent({ user: address }, clockOutListener);
+  evieCoin.events.PayoutMadeEvent({ _to: address }, payoutListener);
 }

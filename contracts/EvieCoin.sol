@@ -13,14 +13,14 @@ contract EvieCoin is ERC20, Ownable {
     using SafeMath for uint;
 
     /// @dev the clock in time for an account on a given day
-    mapping (address => uint) private clock_in_times;
+    mapping (address => uint) public clock_in_times;
 
     /// @dev check the last clock out day for working. Used to ensure that only one clock out is done per day
     mapping (address => uint16) private last_clock_in_day;
 
-    event PayoutMadeEvent(address _to, uint value);
-    event ClockInTimeEvent(address user, uint timestamp);
-    event ClockOutTimeEvent(address user, uint timestamp);
+    event PayoutMadeEvent(address indexed _to, uint value);
+    event ClockInTimeEvent(address indexed user, uint timestamp);
+    event ClockOutTimeEvent(address indexed user, uint timestamp);
 
     constructor(uint256 initialSupply) ERC20("EvieCOIN", "EVE") {
         transferOwnership(msg.sender);
@@ -36,7 +36,6 @@ contract EvieCoin is ERC20, Ownable {
     function clockStartTime() public _once_per_day {
         clock_in_times[msg.sender] = block.timestamp;
         last_clock_in_day[msg.sender] = uint16(block.timestamp.div(1 days));
-        clock_in_times[msg.sender];
         emit ClockInTimeEvent(msg.sender, block.timestamp);
     }
 
@@ -48,7 +47,7 @@ contract EvieCoin is ERC20, Ownable {
             // Payout one full coin
             _payout(msg.sender, 1 * (10 ** decimals()));
         }
-        emit ClockInTimeEvent(msg.sender, block.timestamp);
+        emit ClockOutTimeEvent(msg.sender, block.timestamp);
     }
 
     function mint_new(uint amount) public onlyOwner {
