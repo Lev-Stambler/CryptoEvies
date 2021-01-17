@@ -16,9 +16,11 @@ contract EvieCoin is ERC20, Ownable {
     mapping (address => uint) private clock_in_times;
 
     /// @dev check the last clock out day for working. Used to ensure that only one clock out is done per day
-    mapping (address => uint16) private last_clock_out_day;
+    mapping (address => uint16) private last_clock_in_day;
 
     event PayoutMadeEvent(address _to, uint value);
+    event ClockInTimeEvent(address user, uint timestamp);
+    event ClockOutTimeEvent(address user, uint timestamp);
 
     constructor(uint256 initialSupply) ERC20("EvieCOIN", "EVE") {
         transferOwnership(msg.sender);
@@ -26,26 +28,27 @@ contract EvieCoin is ERC20, Ownable {
     }
 
     modifier _once_per_day() {
-        require(uint16(block.timestamp.div(1 days)) >  last_clock_out_day[msg.sender]);
+        require(uint16(block.timestamp.div(1 days)) >  last_clock_in_day[msg.sender]);
         _;
     }
 
-// TODO only one per day
-    /// @return start time
-    function clockStartTime() public returns(uint) {
+    /// @dev a user clocks in their start time
+    function clockStartTime() public _once_per_day {
         clock_in_times[msg.sender] = block.timestamp;
-        return clock_in_times[msg.sender];
+        last_clock_in_day[msg.sender] = uint16(block.timestamp.div(1 days));
+        clock_in_times[msg.sender];
+        emit ClockInTimeEvent(msg.sender, block.timestamp);
     }
 
     // Not exact, it is off by a few minutes?
-    function clockEndTime() public _once_per_day {
+    function clockEndTime() public {
         uint end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
         if (end_time.sub(clock_in_times[msg.sender]) <= 1 hours) {
             // Payout one full coin
             _payout(msg.sender, 1 * (10 ** decimals()));
         }
-        last_clock_out_day[msg.sender] = uint16(block.timestamp.div(1 days));
+        emit ClockInTimeEvent(msg.sender, block.timestamp);
     }
 
     function mint_new(uint amount) public onlyOwner {

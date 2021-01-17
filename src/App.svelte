@@ -1,50 +1,33 @@
 <script lang="ts">
-  // import Information from "./components/Information.svelte";
-  import EvieCoinContract from "../build/contracts/EvieCoin.json";
+  import dateformat from "dateformat";
   import loadWeb3 from "./utils/web3";
   import { onMount } from "svelte";
+  import { constants } from "./env/constants";
+  import { APIStore, initEvieCoin, UserInfoStore } from "./api/init";
+  import type { IAPIStore, IUserInfo } from "./api/interfaces";
 
   let storageValue: any;
   let connected = false;
   let web3;
-  let address;
-  let evieCoin;
-  let userInfo = {
-    startTime: 0,
-    bal: -1,
-  };
+  let api: IAPIStore
+  let userInfo: Partial<IUserInfo> 
 
   onMount(async () => {
     const instance = await loadWeb3();
     window["web3"] = web3 = instance;
-    await loadBlockchainData();
+    await initEvieCoin(web3);
+    api = $APIStore
+    userInfo = $UserInfoStore
+    connected = true;
+    console.log(api)
   });
 
-  async function loadBlockchainData() {
-    const accounts = (await window.ethereum.send("eth_requestAccounts")).result;
-    const networkId = await window.web3.eth.net.getId();
-    const evieCoinData = EvieCoinContract.networks[networkId];
-    if (evieCoinData) {
-      evieCoin = new web3.eth.Contract(
-        EvieCoinContract.abi,
-        evieCoinData.address
-      );
-      address = accounts[0];
-      console.log(address);
-      userInfo.bal = await evieCoin.methods.balanceOf(address).call();
-      connected = true;
-    } else {
-      window.alert("Evie Coin contract not deployed to detected network.");
-    }
-  }
-
   async function clockIn() {
-    await evieCoin.methods.clockStartTime().send({ from: address });
-    userInfo.startTime = 
+    await api.EvieCoin.methods.clockStartTime().send({ from: userInfo.address });
   }
 
   async function clockOut() {
-    await evieCoin.methods.clockEndTime().send({ from: address });
+    await api.EvieCoin.methods.clockEndTime().send({ from: userInfo.address });
   }
 </script>
 
@@ -57,7 +40,12 @@
     </div>
     <div class="row">
       <div class="col-4">
-        <p>Start time: { userInfo.startTime ? userInfo.startTime : "Please clock in to see your start time" }</p></div>
+        <p>
+          Start time: {userInfo.startTime
+            ? dateformat(userInfo.startTime, constants.dateFormatStr)
+            : "Please clock in to see your start time"}
+        </p>
+      </div>
       <div class="col-4"><button on:click={clockIn}>Clock in</button></div>
       <div class="col-4"><button on:click={clockOut}>Clock out</button></div>
     </div>

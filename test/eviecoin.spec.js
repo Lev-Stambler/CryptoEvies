@@ -55,7 +55,9 @@ contract("EvieCoin", function (accounts) {
     });
   });
 
-  xcontext("Check edge cases/ faulty sends", async () => {
-    xit("Only one clock out can be made per day", async () => {});
+  context("Check edge cases/ faulty sends", async () => {
+    xit("Only one clock out can be made per day", async () => {
+
+    });
   });
 });
