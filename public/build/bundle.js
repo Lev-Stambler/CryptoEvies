@@ -4,6 +4,12 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    function assign(tar, src) {
+        // @ts-ignore
+        for (const k in src)
+            tar[k] = src[k];
+        return tar;
+    }
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -61,6 +67,9 @@ var app = (function () {
     function space() {
         return text(' ');
     }
+    function empty() {
+        return text('');
+    }
     function listen(node, event, handler, options) {
         node.addEventListener(event, handler, options);
         return () => node.removeEventListener(event, handler, options);
@@ -92,6 +101,32 @@ var app = (function () {
     function onMount(fn) {
         get_current_component().$$.on_mount.push(fn);
     }
+    function afterUpdate(fn) {
+        get_current_component().$$.after_update.push(fn);
+    }
+    function createEventDispatcher() {
+        const component = get_current_component();
+        return (type, detail) => {
+            const callbacks = component.$$.callbacks[type];
+            if (callbacks) {
+                // TODO are there situations where events could be dispatched
+                // in a server (non-DOM) environment?
+                const event = custom_event(type, detail);
+                callbacks.slice().forEach(fn => {
+                    fn.call(component, event);
+                });
+            }
+        };
+    }
+    // TODO figure out if we still want to support
+    // shorthand events, or if we want to implement
+    // a real bubbling mechanism
+    function bubble(component, event) {
+        const callbacks = component.$$.callbacks[event.type];
+        if (callbacks) {
+            callbacks.slice().forEach(fn => fn(event));
+        }
+    }
 
     const dirty_components = [];
     const binding_callbacks = [];
@@ -104,6 +139,10 @@ var app = (function () {
             update_scheduled = true;
             resolved_promise.then(flush);
         }
+    }
+    function tick() {
+        schedule_update();
+        return resolved_promise;
     }
     function add_render_callback(fn) {
         render_callbacks.push(fn);
@@ -157,11 +196,87 @@ var app = (function () {
         }
     }
     const outroing = new Set();
+    let outros;
+    function group_outros() {
+        outros = {
+            r: 0,
+            c: [],
+            p: outros // parent group
+        };
+    }
+    function check_outros() {
+        if (!outros.r) {
+            run_all(outros.c);
+        }
+        outros = outros.p;
+    }
     function transition_in(block, local) {
         if (block && block.i) {
             outroing.delete(block);
             block.i(local);
         }
+    }
+    function transition_out(block, local, detach, callback) {
+        if (block && block.o) {
+            if (outroing.has(block))
+                return;
+            outroing.add(block);
+            outros.c.push(() => {
+                outroing.delete(block);
+                if (callback) {
+                    if (detach)
+                        block.d(1);
+                    callback();
+                }
+            });
+            block.o(local);
+        }
+    }
+
+    const globals = (typeof window !== 'undefined'
+        ? window
+        : typeof globalThis !== 'undefined'
+            ? globalThis
+            : global);
+
+    function get_spread_update(levels, updates) {
+        const update = {};
+        const to_null_out = {};
+        const accounted_for = { $$scope: 1 };
+        let i = levels.length;
+        while (i--) {
+            const o = levels[i];
+            const n = updates[i];
+            if (n) {
+                for (const key in o) {
+                    if (!(key in n))
+                        to_null_out[key] = 1;
+                }
+                for (const key in n) {
+                    if (!accounted_for[key]) {
+                        update[key] = n[key];
+                        accounted_for[key] = 1;
+                    }
+                }
+                levels[i] = n;
+            }
+            else {
+                for (const key in o) {
+                    accounted_for[key] = 1;
+                }
+            }
+        }
+        for (const key in to_null_out) {
+            if (!(key in update))
+                update[key] = undefined;
+        }
+        return update;
+    }
+    function get_spread_object(spread_props) {
+        return typeof spread_props === 'object' && spread_props !== null ? spread_props : {};
+    }
+    function create_component(block) {
+        block && block.c();
     }
     function mount_component(component, target, anchor) {
         const { fragment, on_mount, on_destroy, after_update } = component.$$;
@@ -354,44 +469,109 @@ var app = (function () {
         $inject_state() { }
     }
 
-    function createCommonjsModule(fn, basedir, module) {
-    	return module = {
-    		path: basedir,
-    		exports: {},
-    		require: function (path, base) {
-    			return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
-    		}
-    	}, fn(module, module.exports), module.exports;
-    }
+    /**
+     * @typedef {Object} WrappedComponent Object returned by the `wrap` method
+     * @property {SvelteComponent} component - Component to load (this is always asynchronous)
+     * @property {RoutePrecondition[]} [conditions] - Route pre-conditions to validate
+     * @property {Object} [props] - Optional dictionary of static props
+     * @property {Object} [userData] - Optional user data dictionary
+     * @property {bool} _sveltesparouter - Internal flag; always set to true
+     */
 
-    function commonjsRequire () {
-    	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
-    }
+    /**
+     * @callback AsyncSvelteComponent
+     * @returns {Promise<SvelteComponent>} Returns a Promise that resolves with a Svelte component
+     */
 
-    var dateformat = createCommonjsModule(function (module, exports) {
-    function _typeof(obj){"@babel/helpers - typeof";if(typeof Symbol==="function"&&typeof Symbol.iterator==="symbol"){_typeof=function _typeof(obj){return typeof obj};}else {_typeof=function _typeof(obj){return obj&&typeof Symbol==="function"&&obj.constructor===Symbol&&obj!==Symbol.prototype?"symbol":typeof obj};}return _typeof(obj)}(function(global){var _arguments=arguments;var dateFormat=function(){var token=/d{1,4}|D{3,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|[LlopSZWN]|"[^"]*"|'[^']*'/g;var timezone=/\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g;var timezoneClip=/[^-+\dA-Z]/g;return function(date,mask,utc,gmt){if(_arguments.length===1&&kindOf(date)==="string"&&!/\d/.test(date)){mask=date;date=undefined;}date=date||date===0?date:new Date;if(!(date instanceof Date)){date=new Date(date);}if(isNaN(date)){throw TypeError("Invalid date")}mask=String(dateFormat.masks[mask]||mask||dateFormat.masks["default"]);var maskSlice=mask.slice(0,4);if(maskSlice==="UTC:"||maskSlice==="GMT:"){mask=mask.slice(4);utc=true;if(maskSlice==="GMT:"){gmt=true;}}var _=function _(){return utc?"getUTC":"get"};var _d=function d(){return date[_()+"Date"]()};var D=function D(){return date[_()+"Day"]()};var _m=function m(){return date[_()+"Month"]()};var y=function y(){return date[_()+"FullYear"]()};var _H=function H(){return date[_()+"Hours"]()};var _M=function M(){return date[_()+"Minutes"]()};var _s=function s(){return date[_()+"Seconds"]()};var _L=function L(){return date[_()+"Milliseconds"]()};var _o=function o(){return utc?0:date.getTimezoneOffset()};var _W=function W(){return getWeek(date)};var _N=function N(){return getDayOfWeek(date)};var flags={d:function d(){return _d()},dd:function dd(){return pad(_d())},ddd:function ddd(){return dateFormat.i18n.dayNames[D()]},DDD:function DDD(){return getDayName({y:y(),m:_m(),D:D(),_:_(),dayName:dateFormat.i18n.dayNames[D()],short:true})},dddd:function dddd(){return dateFormat.i18n.dayNames[D()+7]},DDDD:function DDDD(){return getDayName({y:y(),m:_m(),D:D(),_:_(),dayName:dateFormat.i18n.dayNames[D()+7]})},m:function m(){return _m()+1},mm:function mm(){return pad(_m()+1)},mmm:function mmm(){return dateFormat.i18n.monthNames[_m()]},mmmm:function mmmm(){return dateFormat.i18n.monthNames[_m()+12]},yy:function yy(){return String(y()).slice(2)},yyyy:function yyyy(){return pad(y(),4)},h:function h(){return _H()%12||12},hh:function hh(){return pad(_H()%12||12)},H:function H(){return _H()},HH:function HH(){return pad(_H())},M:function M(){return _M()},MM:function MM(){return pad(_M())},s:function s(){return _s()},ss:function ss(){return pad(_s())},l:function l(){return pad(_L(),3)},L:function L(){return pad(Math.floor(_L()/10))},t:function t(){return _H()<12?dateFormat.i18n.timeNames[0]:dateFormat.i18n.timeNames[1]},tt:function tt(){return _H()<12?dateFormat.i18n.timeNames[2]:dateFormat.i18n.timeNames[3]},T:function T(){return _H()<12?dateFormat.i18n.timeNames[4]:dateFormat.i18n.timeNames[5]},TT:function TT(){return _H()<12?dateFormat.i18n.timeNames[6]:dateFormat.i18n.timeNames[7]},Z:function Z(){return gmt?"GMT":utc?"UTC":(String(date).match(timezone)||[""]).pop().replace(timezoneClip,"").replace(/GMT\+0000/g,"UTC")},o:function o(){return (_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60)*100+Math.abs(_o())%60,4)},p:function p(){return (_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60),2)+":"+pad(Math.floor(Math.abs(_o())%60),2)},S:function S(){return ["th","st","nd","rd"][_d()%10>3?0:(_d()%100-_d()%10!=10)*_d()%10]},W:function W(){return _W()},N:function N(){return _N()}};return mask.replace(token,function(match){if(match in flags){return flags[match]()}return match.slice(1,match.length-1)})}}();dateFormat.masks={default:"ddd mmm dd yyyy HH:MM:ss",shortDate:"m/d/yy",paddedShortDate:"mm/dd/yyyy",mediumDate:"mmm d, yyyy",longDate:"mmmm d, yyyy",fullDate:"dddd, mmmm d, yyyy",shortTime:"h:MM TT",mediumTime:"h:MM:ss TT",longTime:"h:MM:ss TT Z",isoDate:"yyyy-mm-dd",isoTime:"HH:MM:ss",isoDateTime:"yyyy-mm-dd'T'HH:MM:sso",isoUtcDateTime:"UTC:yyyy-mm-dd'T'HH:MM:ss'Z'",expiresHeaderFormat:"ddd, dd mmm yyyy HH:MM:ss Z"};dateFormat.i18n={dayNames:["Sun","Mon","Tue","Wed","Thu","Fri","Sat","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],monthNames:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","January","February","March","April","May","June","July","August","September","October","November","December"],timeNames:["a","p","am","pm","A","P","AM","PM"]};var pad=function pad(val,len){val=String(val);len=len||2;while(val.length<len){val="0"+val;}return val};var getDayName=function getDayName(_ref){var y=_ref.y,m=_ref.m,D=_ref.D,_=_ref._,dayName=_ref.dayName,_ref$short=_ref["short"],_short=_ref$short===void 0?false:_ref$short;var today=new Date;var yesterday=new Date;yesterday.setDate(yesterday[_+"Date"]()-1);var tomorrow=new Date;tomorrow.setDate(tomorrow[_+"Date"]()+1);var today_D=function today_D(){return today[_+"Day"]()};var today_m=function today_m(){return today[_+"Month"]()};var today_y=function today_y(){return today[_+"FullYear"]()};var yesterday_D=function yesterday_D(){return yesterday[_+"Day"]()};var yesterday_m=function yesterday_m(){return yesterday[_+"Month"]()};var yesterday_y=function yesterday_y(){return yesterday[_+"FullYear"]()};var tomorrow_D=function tomorrow_D(){return tomorrow[_+"Day"]()};var tomorrow_m=function tomorrow_m(){return tomorrow[_+"Month"]()};var tomorrow_y=function tomorrow_y(){return tomorrow[_+"FullYear"]()};if(today_y()===y&&today_m()===m&&today_D()===D){return _short?"Tdy":"Today"}else if(yesterday_y()===y&&yesterday_m()===m&&yesterday_D()===D){return _short?"Ysd":"Yesterday"}else if(tomorrow_y()===y&&tomorrow_m()===m&&tomorrow_D()===D){return _short?"Tmw":"Tomorrow"}return dayName};var getWeek=function getWeek(date){var targetThursday=new Date(date.getFullYear(),date.getMonth(),date.getDate());targetThursday.setDate(targetThursday.getDate()-(targetThursday.getDay()+6)%7+3);var firstThursday=new Date(targetThursday.getFullYear(),0,4);firstThursday.setDate(firstThursday.getDate()-(firstThursday.getDay()+6)%7+3);var ds=targetThursday.getTimezoneOffset()-firstThursday.getTimezoneOffset();targetThursday.setHours(targetThursday.getHours()-ds);var weekDiff=(targetThursday-firstThursday)/(864e5*7);return 1+Math.floor(weekDiff)};var getDayOfWeek=function getDayOfWeek(date){var dow=date.getDay();if(dow===0){dow=7;}return dow};var kindOf=function kindOf(val){if(val===null){return "null"}if(val===undefined){return "undefined"}if(_typeof(val)!=="object"){return _typeof(val)}if(Array.isArray(val)){return "array"}return {}.toString.call(val).slice(8,-1).toLowerCase()};if((_typeof(exports))==="object"){module.exports=dateFormat;}else {global.dateFormat=dateFormat;}})(void 0);
-    });
+    /**
+     * @callback RoutePrecondition
+     * @param {RouteDetail} detail - Route detail object
+     * @returns {boolean|Promise<boolean>} If the callback returns a false-y value, it's interpreted as the precondition failed, so it aborts loading the component (and won't process other pre-condition callbacks)
+     */
 
-    async function loadWeb3 () {
-        // window.Web3 = Web3
-        if (window.ethereum) {
-            window.web3 = new window.Web3(window.ethereum);
-            // await window.ethereum.enable()
+    /**
+     * @typedef {Object} WrapOptions Options object for the call to `wrap`
+     * @property {SvelteComponent} [component] - Svelte component to load (this is incompatible with `asyncComponent`)
+     * @property {AsyncSvelteComponent} [asyncComponent] - Function that returns a Promise that fulfills with a Svelte component (e.g. `{asyncComponent: () => import('Foo.svelte')}`)
+     * @property {SvelteComponent} [loadingComponent] - Svelte component to be displayed while the async route is loading (as a placeholder); when unset or false-y, no component is shown while component
+     * @property {object} [loadingParams] - Optional dictionary passed to the `loadingComponent` component as params (for an exported prop called `params`)
+     * @property {object} [userData] - Optional object that will be passed to events such as `routeLoading`, `routeLoaded`, `conditionsFailed`
+     * @property {object} [props] - Optional key-value dictionary of static props that will be passed to the component. The props are expanded with {...props}, so the key in the dictionary becomes the name of the prop.
+     * @property {RoutePrecondition[]|RoutePrecondition} [conditions] - Route pre-conditions to add, which will be executed in order
+     */
+
+    /**
+     * Wraps a component to enable multiple capabilities:
+     * 1. Using dynamically-imported component, with (e.g. `{asyncComponent: () => import('Foo.svelte')}`), which also allows bundlers to do code-splitting.
+     * 2. Adding route pre-conditions (e.g. `{conditions: [...]}`)
+     * 3. Adding static props that are passed to the component
+     * 4. Adding custom userData, which is passed to route events (e.g. route loaded events) or to route pre-conditions (e.g. `{userData: {foo: 'bar}}`)
+     * 
+     * @param {WrapOptions} args - Arguments object
+     * @returns {WrappedComponent} Wrapped component
+     */
+    function wrap(args) {
+        if (!args) {
+            throw Error('Parameter args is required')
         }
-        else if (window.web3) {
-            window.web3 = new window.Web3(window.web3.currentProvider);
-        }
-        else {
-            window.alert("Non-Ethereum browser detected. You should consider trying MetaMask!");
-        }
-        return window.web3;
-    }
 
-    const constants = {
-        dateFormatStr: "dddd, mmmm dS, yyyy, h:MM:ss TT"
-    };
+        // We need to have one and only one of component and asyncComponent
+        // This does a "XNOR"
+        if (!args.component == !args.asyncComponent) {
+            throw Error('One and only one of component and asyncComponent is required')
+        }
+
+        // If the component is not async, wrap it into a function returning a Promise
+        if (args.component) {
+            args.asyncComponent = () => Promise.resolve(args.component);
+        }
+
+        // Parameter asyncComponent and each item of conditions must be functions
+        if (typeof args.asyncComponent != 'function') {
+            throw Error('Parameter asyncComponent must be a function')
+        }
+        if (args.conditions) {
+            // Ensure it's an array
+            if (!Array.isArray(args.conditions)) {
+                args.conditions = [args.conditions];
+            }
+            for (let i = 0; i < args.conditions.length; i++) {
+                if (!args.conditions[i] || typeof args.conditions[i] != 'function') {
+                    throw Error('Invalid parameter conditions[' + i + ']')
+                }
+            }
+        }
+
+        // Check if we have a placeholder component
+        if (args.loadingComponent) {
+            args.asyncComponent.loading = args.loadingComponent;
+            args.asyncComponent.loadingParams = args.loadingParams || undefined;
+        }
+
+        // Returns an object that contains all the functions to execute too
+        // The _sveltesparouter flag is to confirm the object was created by this router
+        const obj = {
+            component: args.asyncComponent,
+            userData: args.userData,
+            conditions: (args.conditions && args.conditions.length) ? args.conditions : undefined,
+            props: (args.props && Object.keys(args.props).length) ? args.props : {},
+            _sveltesparouter: true
+        };
+
+        return obj
+    }
 
     const subscriber_queue = [];
+    /**
+     * Creates a `Readable` store that allows reading by subscription.
+     * @param value initial value
+     * @param {StartStopNotifier}start start and stop notifications for subscriptions
+     */
+    function readable(value, start) {
+        return {
+            subscribe: writable(value, start).subscribe
+        };
+    }
     /**
      * Create a `Writable` store that allows both updating and reading by subscription.
      * @param {*=}value initial value
@@ -441,6 +621,956 @@ var app = (function () {
             };
         }
         return { set, update, subscribe };
+    }
+    function derived(stores, fn, initial_value) {
+        const single = !Array.isArray(stores);
+        const stores_array = single
+            ? [stores]
+            : stores;
+        const auto = fn.length < 2;
+        return readable(initial_value, (set) => {
+            let inited = false;
+            const values = [];
+            let pending = 0;
+            let cleanup = noop;
+            const sync = () => {
+                if (pending) {
+                    return;
+                }
+                cleanup();
+                const result = fn(single ? values[0] : values, set);
+                if (auto) {
+                    set(result);
+                }
+                else {
+                    cleanup = is_function(result) ? result : noop;
+                }
+            };
+            const unsubscribers = stores_array.map((store, i) => subscribe(store, (value) => {
+                values[i] = value;
+                pending &= ~(1 << i);
+                if (inited) {
+                    sync();
+                }
+            }, () => {
+                pending |= (1 << i);
+            }));
+            inited = true;
+            sync();
+            return function stop() {
+                run_all(unsubscribers);
+                cleanup();
+            };
+        });
+    }
+
+    function regexparam (str, loose) {
+    	if (str instanceof RegExp) return { keys:false, pattern:str };
+    	var c, o, tmp, ext, keys=[], pattern='', arr = str.split('/');
+    	arr[0] || arr.shift();
+
+    	while (tmp = arr.shift()) {
+    		c = tmp[0];
+    		if (c === '*') {
+    			keys.push('wild');
+    			pattern += '/(.*)';
+    		} else if (c === ':') {
+    			o = tmp.indexOf('?', 1);
+    			ext = tmp.indexOf('.', 1);
+    			keys.push( tmp.substring(1, !!~o ? o : !!~ext ? ext : tmp.length) );
+    			pattern += !!~o && !~ext ? '(?:/([^/]+?))?' : '/([^/]+?)';
+    			if (!!~ext) pattern += (!!~o ? '?' : '') + '\\' + tmp.substring(ext);
+    		} else {
+    			pattern += '/' + tmp;
+    		}
+    	}
+
+    	return {
+    		keys: keys,
+    		pattern: new RegExp('^' + pattern + (loose ? '(?=$|\/)' : '\/?$'), 'i')
+    	};
+    }
+
+    /* node_modules/svelte-spa-router/Router.svelte generated by Svelte v3.31.2 */
+
+    const { Error: Error_1, Object: Object_1, console: console_1 } = globals;
+
+    // (209:0) {:else}
+    function create_else_block(ctx) {
+    	let switch_instance;
+    	let switch_instance_anchor;
+    	let current;
+    	const switch_instance_spread_levels = [/*props*/ ctx[2]];
+    	var switch_value = /*component*/ ctx[0];
+
+    	function switch_props(ctx) {
+    		let switch_instance_props = {};
+
+    		for (let i = 0; i < switch_instance_spread_levels.length; i += 1) {
+    			switch_instance_props = assign(switch_instance_props, switch_instance_spread_levels[i]);
+    		}
+
+    		return {
+    			props: switch_instance_props,
+    			$$inline: true
+    		};
+    	}
+
+    	if (switch_value) {
+    		switch_instance = new switch_value(switch_props());
+    		switch_instance.$on("routeEvent", /*routeEvent_handler_1*/ ctx[7]);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			if (switch_instance) create_component(switch_instance.$$.fragment);
+    			switch_instance_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if (switch_instance) {
+    				mount_component(switch_instance, target, anchor);
+    			}
+
+    			insert_dev(target, switch_instance_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const switch_instance_changes = (dirty & /*props*/ 4)
+    			? get_spread_update(switch_instance_spread_levels, [get_spread_object(/*props*/ ctx[2])])
+    			: {};
+
+    			if (switch_value !== (switch_value = /*component*/ ctx[0])) {
+    				if (switch_instance) {
+    					group_outros();
+    					const old_component = switch_instance;
+
+    					transition_out(old_component.$$.fragment, 1, 0, () => {
+    						destroy_component(old_component, 1);
+    					});
+
+    					check_outros();
+    				}
+
+    				if (switch_value) {
+    					switch_instance = new switch_value(switch_props());
+    					switch_instance.$on("routeEvent", /*routeEvent_handler_1*/ ctx[7]);
+    					create_component(switch_instance.$$.fragment);
+    					transition_in(switch_instance.$$.fragment, 1);
+    					mount_component(switch_instance, switch_instance_anchor.parentNode, switch_instance_anchor);
+    				} else {
+    					switch_instance = null;
+    				}
+    			} else if (switch_value) {
+    				switch_instance.$set(switch_instance_changes);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			if (switch_instance) transition_in(switch_instance.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			if (switch_instance) transition_out(switch_instance.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(switch_instance_anchor);
+    			if (switch_instance) destroy_component(switch_instance, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block.name,
+    		type: "else",
+    		source: "(209:0) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (202:0) {#if componentParams}
+    function create_if_block(ctx) {
+    	let switch_instance;
+    	let switch_instance_anchor;
+    	let current;
+    	const switch_instance_spread_levels = [{ params: /*componentParams*/ ctx[1] }, /*props*/ ctx[2]];
+    	var switch_value = /*component*/ ctx[0];
+
+    	function switch_props(ctx) {
+    		let switch_instance_props = {};
+
+    		for (let i = 0; i < switch_instance_spread_levels.length; i += 1) {
+    			switch_instance_props = assign(switch_instance_props, switch_instance_spread_levels[i]);
+    		}
+
+    		return {
+    			props: switch_instance_props,
+    			$$inline: true
+    		};
+    	}
+
+    	if (switch_value) {
+    		switch_instance = new switch_value(switch_props());
+    		switch_instance.$on("routeEvent", /*routeEvent_handler*/ ctx[6]);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			if (switch_instance) create_component(switch_instance.$$.fragment);
+    			switch_instance_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if (switch_instance) {
+    				mount_component(switch_instance, target, anchor);
+    			}
+
+    			insert_dev(target, switch_instance_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const switch_instance_changes = (dirty & /*componentParams, props*/ 6)
+    			? get_spread_update(switch_instance_spread_levels, [
+    					dirty & /*componentParams*/ 2 && { params: /*componentParams*/ ctx[1] },
+    					dirty & /*props*/ 4 && get_spread_object(/*props*/ ctx[2])
+    				])
+    			: {};
+
+    			if (switch_value !== (switch_value = /*component*/ ctx[0])) {
+    				if (switch_instance) {
+    					group_outros();
+    					const old_component = switch_instance;
+
+    					transition_out(old_component.$$.fragment, 1, 0, () => {
+    						destroy_component(old_component, 1);
+    					});
+
+    					check_outros();
+    				}
+
+    				if (switch_value) {
+    					switch_instance = new switch_value(switch_props());
+    					switch_instance.$on("routeEvent", /*routeEvent_handler*/ ctx[6]);
+    					create_component(switch_instance.$$.fragment);
+    					transition_in(switch_instance.$$.fragment, 1);
+    					mount_component(switch_instance, switch_instance_anchor.parentNode, switch_instance_anchor);
+    				} else {
+    					switch_instance = null;
+    				}
+    			} else if (switch_value) {
+    				switch_instance.$set(switch_instance_changes);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			if (switch_instance) transition_in(switch_instance.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			if (switch_instance) transition_out(switch_instance.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(switch_instance_anchor);
+    			if (switch_instance) destroy_component(switch_instance, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block.name,
+    		type: "if",
+    		source: "(202:0) {#if componentParams}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment(ctx) {
+    	let current_block_type_index;
+    	let if_block;
+    	let if_block_anchor;
+    	let current;
+    	const if_block_creators = [create_if_block, create_else_block];
+    	const if_blocks = [];
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*componentParams*/ ctx[1]) return 0;
+    		return 1;
+    	}
+
+    	current_block_type_index = select_block_type(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+    	const block = {
+    		c: function create() {
+    			if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		l: function claim(nodes) {
+    			throw new Error_1("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			if_blocks[current_block_type_index].m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			let previous_block_index = current_block_type_index;
+    			current_block_type_index = select_block_type(ctx);
+
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
+    				group_outros();
+
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+
+    				check_outros();
+    				if_block = if_blocks[current_block_type_index];
+
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
+    				} else {
+    					if_block.p(ctx, dirty);
+    				}
+
+    				transition_in(if_block, 1);
+    				if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if_blocks[current_block_type_index].d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function wrap$1(component, userData, ...conditions) {
+    	// Use the new wrap method and show a deprecation warning
+    	// eslint-disable-next-line no-console
+    	console.warn("Method `wrap` from `svelte-spa-router` is deprecated and will be removed in a future version. Please use `svelte-spa-router/wrap` instead. See http://bit.ly/svelte-spa-router-upgrading");
+
+    	return wrap({ component, userData, conditions });
+    }
+
+    /**
+     * @typedef {Object} Location
+     * @property {string} location - Location (page/view), for example `/book`
+     * @property {string} [querystring] - Querystring from the hash, as a string not parsed
+     */
+    /**
+     * Returns the current location from the hash.
+     *
+     * @returns {Location} Location object
+     * @private
+     */
+    function getLocation() {
+    	const hashPosition = window.location.href.indexOf("#/");
+
+    	let location = hashPosition > -1
+    	? window.location.href.substr(hashPosition + 1)
+    	: "/";
+
+    	// Check if there's a querystring
+    	const qsPosition = location.indexOf("?");
+
+    	let querystring = "";
+
+    	if (qsPosition > -1) {
+    		querystring = location.substr(qsPosition + 1);
+    		location = location.substr(0, qsPosition);
+    	}
+
+    	return { location, querystring };
+    }
+
+    const loc = readable(null, // eslint-disable-next-line prefer-arrow-callback
+    function start(set) {
+    	set(getLocation());
+
+    	const update = () => {
+    		set(getLocation());
+    	};
+
+    	window.addEventListener("hashchange", update, false);
+
+    	return function stop() {
+    		window.removeEventListener("hashchange", update, false);
+    	};
+    });
+
+    const location = derived(loc, $loc => $loc.location);
+    const querystring = derived(loc, $loc => $loc.querystring);
+
+    async function push(location) {
+    	if (!location || location.length < 1 || location.charAt(0) != "/" && location.indexOf("#/") !== 0) {
+    		throw Error("Invalid parameter location");
+    	}
+
+    	// Execute this code when the current call stack is complete
+    	await tick();
+
+    	// Note: this will include scroll state in history even when restoreScrollState is false
+    	history.replaceState(
+    		{
+    			scrollX: window.scrollX,
+    			scrollY: window.scrollY
+    		},
+    		undefined,
+    		undefined
+    	);
+
+    	window.location.hash = (location.charAt(0) == "#" ? "" : "#") + location;
+    }
+
+    async function pop() {
+    	// Execute this code when the current call stack is complete
+    	await tick();
+
+    	window.history.back();
+    }
+
+    async function replace(location) {
+    	if (!location || location.length < 1 || location.charAt(0) != "/" && location.indexOf("#/") !== 0) {
+    		throw Error("Invalid parameter location");
+    	}
+
+    	// Execute this code when the current call stack is complete
+    	await tick();
+
+    	const dest = (location.charAt(0) == "#" ? "" : "#") + location;
+
+    	try {
+    		window.history.replaceState(undefined, undefined, dest);
+    	} catch(e) {
+    		// eslint-disable-next-line no-console
+    		console.warn("Caught exception while replacing the current page. If you're running this in the Svelte REPL, please note that the `replace` method might not work in this environment.");
+    	}
+
+    	// The method above doesn't trigger the hashchange event, so let's do that manually
+    	window.dispatchEvent(new Event("hashchange"));
+    }
+
+    function link(node, hrefVar) {
+    	// Only apply to <a> tags
+    	if (!node || !node.tagName || node.tagName.toLowerCase() != "a") {
+    		throw Error("Action \"link\" can only be used with <a> tags");
+    	}
+
+    	updateLink(node, hrefVar || node.getAttribute("href"));
+
+    	return {
+    		update(updated) {
+    			updateLink(node, updated);
+    		}
+    	};
+    }
+
+    // Internal function used by the link function
+    function updateLink(node, href) {
+    	// Destination must start with '/'
+    	if (!href || href.length < 1 || href.charAt(0) != "/") {
+    		throw Error("Invalid value for \"href\" attribute: " + href);
+    	}
+
+    	// Add # to the href attribute
+    	node.setAttribute("href", "#" + href);
+
+    	node.addEventListener("click", scrollstateHistoryHandler);
+    }
+
+    /**
+     * The handler attached to an anchor tag responsible for updating the
+     * current history state with the current scroll state
+     *
+     * @param {HTMLElementEventMap} event - an onclick event attached to an anchor tag
+     */
+    function scrollstateHistoryHandler(event) {
+    	// Prevent default anchor onclick behaviour
+    	event.preventDefault();
+
+    	const href = event.currentTarget.getAttribute("href");
+
+    	// Setting the url (3rd arg) to href will break clicking for reasons, so don't try to do that
+    	history.replaceState(
+    		{
+    			scrollX: window.scrollX,
+    			scrollY: window.scrollY
+    		},
+    		undefined,
+    		undefined
+    	);
+
+    	// This will force an update as desired, but this time our scroll state will be attached
+    	window.location.hash = href;
+    }
+
+    function instance($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("Router", slots, []);
+    	let { routes = {} } = $$props;
+    	let { prefix = "" } = $$props;
+    	let { restoreScrollState = false } = $$props;
+
+    	/**
+     * Container for a route: path, component
+     */
+    	class RouteItem {
+    		/**
+     * Initializes the object and creates a regular expression from the path, using regexparam.
+     *
+     * @param {string} path - Path to the route (must start with '/' or '*')
+     * @param {SvelteComponent|WrappedComponent} component - Svelte component for the route, optionally wrapped
+     */
+    		constructor(path, component) {
+    			if (!component || typeof component != "function" && (typeof component != "object" || component._sveltesparouter !== true)) {
+    				throw Error("Invalid component object");
+    			}
+
+    			// Path must be a regular or expression, or a string starting with '/' or '*'
+    			if (!path || typeof path == "string" && (path.length < 1 || path.charAt(0) != "/" && path.charAt(0) != "*") || typeof path == "object" && !(path instanceof RegExp)) {
+    				throw Error("Invalid value for \"path\" argument - strings must start with / or *");
+    			}
+
+    			const { pattern, keys } = regexparam(path);
+    			this.path = path;
+
+    			// Check if the component is wrapped and we have conditions
+    			if (typeof component == "object" && component._sveltesparouter === true) {
+    				this.component = component.component;
+    				this.conditions = component.conditions || [];
+    				this.userData = component.userData;
+    				this.props = component.props || {};
+    			} else {
+    				// Convert the component to a function that returns a Promise, to normalize it
+    				this.component = () => Promise.resolve(component);
+
+    				this.conditions = [];
+    				this.props = {};
+    			}
+
+    			this._pattern = pattern;
+    			this._keys = keys;
+    		}
+
+    		/**
+     * Checks if `path` matches the current route.
+     * If there's a match, will return the list of parameters from the URL (if any).
+     * In case of no match, the method will return `null`.
+     *
+     * @param {string} path - Path to test
+     * @returns {null|Object.<string, string>} List of paramters from the URL if there's a match, or `null` otherwise.
+     */
+    		match(path) {
+    			// If there's a prefix, check if it matches the start of the path.
+    			// If not, bail early, else remove it before we run the matching.
+    			if (prefix) {
+    				if (typeof prefix == "string") {
+    					if (path.startsWith(prefix)) {
+    						path = path.substr(prefix.length) || "/";
+    					} else {
+    						return null;
+    					}
+    				} else if (prefix instanceof RegExp) {
+    					const match = path.match(prefix);
+
+    					if (match && match[0]) {
+    						path = path.substr(match[0].length) || "/";
+    					} else {
+    						return null;
+    					}
+    				}
+    			}
+
+    			// Check if the pattern matches
+    			const matches = this._pattern.exec(path);
+
+    			if (matches === null) {
+    				return null;
+    			}
+
+    			// If the input was a regular expression, this._keys would be false, so return matches as is
+    			if (this._keys === false) {
+    				return matches;
+    			}
+
+    			const out = {};
+    			let i = 0;
+
+    			while (i < this._keys.length) {
+    				// In the match parameters, URL-decode all values
+    				try {
+    					out[this._keys[i]] = decodeURIComponent(matches[i + 1] || "") || null;
+    				} catch(e) {
+    					out[this._keys[i]] = null;
+    				}
+
+    				i++;
+    			}
+
+    			return out;
+    		}
+
+    		/**
+     * Dictionary with route details passed to the pre-conditions functions, as well as the `routeLoading`, `routeLoaded` and `conditionsFailed` events
+     * @typedef {Object} RouteDetail
+     * @property {string|RegExp} route - Route matched as defined in the route definition (could be a string or a reguar expression object)
+     * @property {string} location - Location path
+     * @property {string} querystring - Querystring from the hash
+     * @property {object} [userData] - Custom data passed by the user
+     * @property {SvelteComponent} [component] - Svelte component (only in `routeLoaded` events)
+     * @property {string} [name] - Name of the Svelte component (only in `routeLoaded` events)
+     */
+    		/**
+     * Executes all conditions (if any) to control whether the route can be shown. Conditions are executed in the order they are defined, and if a condition fails, the following ones aren't executed.
+     * 
+     * @param {RouteDetail} detail - Route detail
+     * @returns {bool} Returns true if all the conditions succeeded
+     */
+    		async checkConditions(detail) {
+    			for (let i = 0; i < this.conditions.length; i++) {
+    				if (!await this.conditions[i](detail)) {
+    					return false;
+    				}
+    			}
+
+    			return true;
+    		}
+    	}
+
+    	// Set up all routes
+    	const routesList = [];
+
+    	if (routes instanceof Map) {
+    		// If it's a map, iterate on it right away
+    		routes.forEach((route, path) => {
+    			routesList.push(new RouteItem(path, route));
+    		});
+    	} else {
+    		// We have an object, so iterate on its own properties
+    		Object.keys(routes).forEach(path => {
+    			routesList.push(new RouteItem(path, routes[path]));
+    		});
+    	}
+
+    	// Props for the component to render
+    	let component = null;
+
+    	let componentParams = null;
+    	let props = {};
+
+    	// Event dispatcher from Svelte
+    	const dispatch = createEventDispatcher();
+
+    	// Just like dispatch, but executes on the next iteration of the event loop
+    	async function dispatchNextTick(name, detail) {
+    		// Execute this code when the current call stack is complete
+    		await tick();
+
+    		dispatch(name, detail);
+    	}
+
+    	// If this is set, then that means we have popped into this var the state of our last scroll position
+    	let previousScrollState = null;
+
+    	if (restoreScrollState) {
+    		window.addEventListener("popstate", event => {
+    			// If this event was from our history.replaceState, event.state will contain
+    			// our scroll history. Otherwise, event.state will be null (like on forward
+    			// navigation)
+    			if (event.state && event.state.scrollY) {
+    				previousScrollState = event.state;
+    			} else {
+    				previousScrollState = null;
+    			}
+    		});
+
+    		afterUpdate(() => {
+    			// If this exists, then this is a back navigation: restore the scroll position
+    			if (previousScrollState) {
+    				window.scrollTo(previousScrollState.scrollX, previousScrollState.scrollY);
+    			} else {
+    				// Otherwise this is a forward navigation: scroll to top
+    				window.scrollTo(0, 0);
+    			}
+    		});
+    	}
+
+    	// Always have the latest value of loc
+    	let lastLoc = null;
+
+    	// Current object of the component loaded
+    	let componentObj = null;
+
+    	// Handle hash change events
+    	// Listen to changes in the $loc store and update the page
+    	// Do not use the $: syntax because it gets triggered by too many things
+    	loc.subscribe(async newLoc => {
+    		lastLoc = newLoc;
+
+    		// Find a route matching the location
+    		let i = 0;
+
+    		while (i < routesList.length) {
+    			const match = routesList[i].match(newLoc.location);
+
+    			if (!match) {
+    				i++;
+    				continue;
+    			}
+
+    			const detail = {
+    				route: routesList[i].path,
+    				location: newLoc.location,
+    				querystring: newLoc.querystring,
+    				userData: routesList[i].userData
+    			};
+
+    			// Check if the route can be loaded - if all conditions succeed
+    			if (!await routesList[i].checkConditions(detail)) {
+    				// Don't display anything
+    				$$invalidate(0, component = null);
+
+    				componentObj = null;
+
+    				// Trigger an event to notify the user, then exit
+    				dispatchNextTick("conditionsFailed", detail);
+
+    				return;
+    			}
+
+    			// Trigger an event to alert that we're loading the route
+    			// We need to clone the object on every event invocation so we don't risk the object to be modified in the next tick
+    			dispatchNextTick("routeLoading", Object.assign({}, detail));
+
+    			// If there's a component to show while we're loading the route, display it
+    			const obj = routesList[i].component;
+
+    			// Do not replace the component if we're loading the same one as before, to avoid the route being unmounted and re-mounted
+    			if (componentObj != obj) {
+    				if (obj.loading) {
+    					$$invalidate(0, component = obj.loading);
+    					componentObj = obj;
+    					$$invalidate(1, componentParams = obj.loadingParams);
+    					$$invalidate(2, props = {});
+
+    					// Trigger the routeLoaded event for the loading component
+    					// Create a copy of detail so we don't modify the object for the dynamic route (and the dynamic route doesn't modify our object too)
+    					dispatchNextTick("routeLoaded", Object.assign({}, detail, { component, name: component.name }));
+    				} else {
+    					$$invalidate(0, component = null);
+    					componentObj = null;
+    				}
+
+    				// Invoke the Promise
+    				const loaded = await obj();
+
+    				// Now that we're here, after the promise resolved, check if we still want this component, as the user might have navigated to another page in the meanwhile
+    				if (newLoc != lastLoc) {
+    					// Don't update the component, just exit
+    					return;
+    				}
+
+    				// If there is a "default" property, which is used by async routes, then pick that
+    				$$invalidate(0, component = loaded && loaded.default || loaded);
+
+    				componentObj = obj;
+    			}
+
+    			// Set componentParams only if we have a match, to avoid a warning similar to `<Component> was created with unknown prop 'params'`
+    			// Of course, this assumes that developers always add a "params" prop when they are expecting parameters
+    			if (match && typeof match == "object" && Object.keys(match).length) {
+    				$$invalidate(1, componentParams = match);
+    			} else {
+    				$$invalidate(1, componentParams = null);
+    			}
+
+    			// Set static props, if any
+    			$$invalidate(2, props = routesList[i].props);
+
+    			// Dispatch the routeLoaded event then exit
+    			// We need to clone the object on every event invocation so we don't risk the object to be modified in the next tick
+    			dispatchNextTick("routeLoaded", Object.assign({}, detail, { component, name: component.name }));
+
+    			return;
+    		}
+
+    		// If we're still here, there was no match, so show the empty component
+    		$$invalidate(0, component = null);
+
+    		componentObj = null;
+    	});
+
+    	const writable_props = ["routes", "prefix", "restoreScrollState"];
+
+    	Object_1.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Router> was created with unknown prop '${key}'`);
+    	});
+
+    	function routeEvent_handler(event) {
+    		bubble($$self, event);
+    	}
+
+    	function routeEvent_handler_1(event) {
+    		bubble($$self, event);
+    	}
+
+    	$$self.$$set = $$props => {
+    		if ("routes" in $$props) $$invalidate(3, routes = $$props.routes);
+    		if ("prefix" in $$props) $$invalidate(4, prefix = $$props.prefix);
+    		if ("restoreScrollState" in $$props) $$invalidate(5, restoreScrollState = $$props.restoreScrollState);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		readable,
+    		derived,
+    		tick,
+    		_wrap: wrap,
+    		wrap: wrap$1,
+    		getLocation,
+    		loc,
+    		location,
+    		querystring,
+    		push,
+    		pop,
+    		replace,
+    		link,
+    		updateLink,
+    		scrollstateHistoryHandler,
+    		createEventDispatcher,
+    		afterUpdate,
+    		regexparam,
+    		routes,
+    		prefix,
+    		restoreScrollState,
+    		RouteItem,
+    		routesList,
+    		component,
+    		componentParams,
+    		props,
+    		dispatch,
+    		dispatchNextTick,
+    		previousScrollState,
+    		lastLoc,
+    		componentObj
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("routes" in $$props) $$invalidate(3, routes = $$props.routes);
+    		if ("prefix" in $$props) $$invalidate(4, prefix = $$props.prefix);
+    		if ("restoreScrollState" in $$props) $$invalidate(5, restoreScrollState = $$props.restoreScrollState);
+    		if ("component" in $$props) $$invalidate(0, component = $$props.component);
+    		if ("componentParams" in $$props) $$invalidate(1, componentParams = $$props.componentParams);
+    		if ("props" in $$props) $$invalidate(2, props = $$props.props);
+    		if ("previousScrollState" in $$props) previousScrollState = $$props.previousScrollState;
+    		if ("lastLoc" in $$props) lastLoc = $$props.lastLoc;
+    		if ("componentObj" in $$props) componentObj = $$props.componentObj;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*restoreScrollState*/ 32) {
+    			// Update history.scrollRestoration depending on restoreScrollState
+    			 history.scrollRestoration = restoreScrollState ? "manual" : "auto";
+    		}
+    	};
+
+    	return [
+    		component,
+    		componentParams,
+    		props,
+    		routes,
+    		prefix,
+    		restoreScrollState,
+    		routeEvent_handler,
+    		routeEvent_handler_1
+    	];
+    }
+
+    class Router extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+
+    		init(this, options, instance, create_fragment, safe_not_equal, {
+    			routes: 3,
+    			prefix: 4,
+    			restoreScrollState: 5
+    		});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Router",
+    			options,
+    			id: create_fragment.name
+    		});
+    	}
+
+    	get routes() {
+    		throw new Error_1("<Router>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set routes(value) {
+    		throw new Error_1("<Router>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get prefix() {
+    		throw new Error_1("<Router>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set prefix(value) {
+    		throw new Error_1("<Router>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get restoreScrollState() {
+    		throw new Error_1("<Router>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set restoreScrollState(value) {
+    		throw new Error_1("<Router>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    async function loadWeb3 () {
+        // window.Web3 = Web3
+        if (window.ethereum) {
+            window.web3 = new window.Web3(window.ethereum);
+            // await window.ethereum.enable()
+        }
+        else if (window.web3) {
+            window.web3 = new window.Web3(window.web3.currentProvider);
+        }
+        else {
+            window.alert("Non-Ethereum browser detected. You should consider trying MetaMask!");
+        }
+        return window.web3;
     }
 
     var contractName = "EvieCoin";
@@ -6994,12 +8124,12 @@ var app = (function () {
     		},
     		links: {
     		},
-    		address: "0x757B747bB52BDda7EE97103D3e1dd7a3408cc57D",
-    		transactionHash: "0x1b328fb258c2f44d81a0379e5d619f10eeec45b5b6a384b6153dc3614b7389b3"
+    		address: "0x94e674d30Fd70497Ccc5eC757ee8e28E8b4Db0D2",
+    		transactionHash: "0x6ced3fefd5075161e53bc89b8b93bf0d3a02d402444d0205122f77eb84078272"
     	}
     };
     var schemaVersion = "3.3.3";
-    var updatedAt = "2021-01-17T14:48:05.997Z";
+    var updatedAt = "2021-01-17T18:09:40.322Z";
     var networkType = "ethereum";
     var devdoc = {
     	kind: "dev",
@@ -7093,8 +8223,23 @@ var app = (function () {
     }
 
     function weiToCoinNumber(wei) {
-        return window.web3.utils.fromWei(wei);
+        return window.web3.utils.fromWei(wei.toString());
     }
+
+    const APIWriteable = writable({
+        EvieCoin: undefined,
+        address: "",
+    });
+    const StudentInfoWriteable = writable({});
+    const APIStore = {
+        subscribe: APIWriteable.subscribe,
+        update: APIWriteable.update,
+        set: APIWriteable.set,
+    };
+    const StudentInfoStore = {
+        subscribe: StudentInfoWriteable.subscribe,
+        update: StudentInfoWriteable.update,
+    };
 
     function wrapper(f) {
         return (err, event) => {
@@ -7109,81 +8254,237 @@ var app = (function () {
     function _clockOutListener(event) {
         const { timestamp } = event.returnValues;
         let endTime = ethTimestampToDate(timestamp);
-        console.log(endTime);
-        UserInfoStore.update((u) => {
+        StudentInfoStore.update((u) => {
             return Object.assign(Object.assign({}, u), { endTime });
         });
     }
     function _clockInListener(event) {
         const { timestamp } = event.returnValues;
         let startTime = ethTimestampToDate(timestamp);
-        console.log(startTime);
-        UserInfoStore.update((u) => {
+        StudentInfoStore.update((u) => {
             return Object.assign(Object.assign({}, u), { startTime });
         });
     }
     function _payoutListener(event) {
-        const { value } = weiToCoinNumber(event.returnValues);
+        const valWei = event.returnValues.value;
+        const value = weiToCoinNumber(valWei);
+        StudentInfoStore.update((u) => {
+            return Object.assign(Object.assign({}, u), { bal: u.bal + valWei });
+        });
         alert(`You just got paid out ${value}`);
     }
     const clockInListener = wrapper(_clockInListener);
     const clockOutListener = wrapper(_clockOutListener);
     const payoutListener = wrapper(_payoutListener);
 
-    const APIWriteable = writable({
-        EvieCoin: undefined,
-        address: "",
-    });
-    const UserInfoWriteable = writable({});
-    const APIStore = {
-        subscribe: APIWriteable.subscribe,
-        update: APIWriteable.update,
-    };
-    const UserInfoStore = {
-        subscribe: UserInfoWriteable.subscribe,
-        update: APIWriteable.update,
-    };
     async function initEvieCoin(web3) {
-        await loadBlockchainData(web3);
+        const { EvieCoin, address } = await loadBlockchainData(web3);
+        await setEventListeners(EvieCoin, address);
     }
-    APIWriteable.subscribe(async (api) => {
-        if (api.EvieCoin) {
-            const proms = [
-                setEventListeners(api.EvieCoin, api.address),
-                loadInitClockIn(api.EvieCoin, api.address),
-                loadInitClockOut(api.EvieCoin, api.address),
-            ];
-            await Promise.all(proms);
-        }
-    });
     async function loadBlockchainData(web3) {
         const accounts = (await window.ethereum.send("eth_requestAccounts")).result;
         const networkId = await window.web3.eth.net.getId();
+        let address;
         const evieCoinData = EvieCoinContract.networks[networkId];
         let evieCoin;
         if (evieCoinData) {
             evieCoin = new web3.eth.Contract(EvieCoinContract.abi, evieCoinData.address);
-            APIWriteable.set({
+            APIStore.set({
                 EvieCoin: evieCoin,
                 address: accounts[0],
-            });
-            const bal = await evieCoin.methods.balanceOf(accounts[0]).call();
-            UserInfoWriteable.update((u) => {
-                return Object.assign(Object.assign({}, u), { address: accounts[0], bal });
             });
         }
         else {
             window.alert("Evie Coin contract not deployed to detected network.");
             throw "Evie Coin contract not deployed to detected network.";
         }
+        return {
+            EvieCoin: evieCoin,
+            address,
+        };
     }
+    async function setEventListeners(evieCoin, address) {
+        evieCoin.events.ClockInTimeEvent({ user: address }, clockInListener);
+        evieCoin.events.ClockOutTimeEvent({ user: address }, clockOutListener);
+        evieCoin.events.PayoutMadeEvent({ _to: address }, payoutListener);
+    }
+
+    /* src/Pages/SelectUserTypePage.svelte generated by Svelte v3.31.2 */
+    const file = "src/Pages/SelectUserTypePage.svelte";
+
+    function create_fragment$1(ctx) {
+    	let div;
+    	let h2;
+    	let t1;
+    	let button0;
+    	let button1;
+    	let mounted;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			h2 = element("h2");
+    			h2.textContent = "Are you a student or supervisor?";
+    			t1 = space();
+    			button0 = element("button");
+    			button0.textContent = "Student";
+    			button1 = element("button");
+    			button1.textContent = "Supervisor";
+    			add_location(h2, file, 5, 2, 100);
+    			add_location(button0, file, 6, 2, 144);
+    			add_location(button1, file, 6, 61, 203);
+    			attr_dev(div, "class", "modal");
+    			add_location(div, file, 4, 0, 78);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, h2);
+    			append_dev(div, t1);
+    			append_dev(div, button0);
+    			append_dev(div, button1);
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(button0, "click", /*click_handler*/ ctx[0], false, false, false),
+    					listen_dev(button1, "click", /*click_handler_1*/ ctx[1], false, false, false)
+    				];
+
+    				mounted = true;
+    			}
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$1($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("SelectUserTypePage", slots, []);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<SelectUserTypePage> was created with unknown prop '${key}'`);
+    	});
+
+    	const click_handler = () => push("/student");
+    	const click_handler_1 = () => push("/supervisor");
+    	$$self.$capture_state = () => ({ push, pop, replace });
+    	return [click_handler, click_handler_1];
+    }
+
+    class SelectUserTypePage extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "SelectUserTypePage",
+    			options,
+    			id: create_fragment$1.name
+    		});
+    	}
+    }
+
+    /* src/Pages/SupervisorPage.svelte generated by Svelte v3.31.2 */
+
+    function create_fragment$2(ctx) {
+    	const block = {
+    		c: noop,
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: noop,
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: noop
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$2.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$2($$self, $$props) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("SupervisorPage", slots, []);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<SupervisorPage> was created with unknown prop '${key}'`);
+    	});
+
+    	return [];
+    }
+
+    class SupervisorPage extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "SupervisorPage",
+    			options,
+    			id: create_fragment$2.name
+    		});
+    	}
+    }
+
+    const constants = {
+        dateFormatStr: "dddd, mmmm dS, yyyy, h:MM:ss TT"
+    };
+
+    function createCommonjsModule(fn, basedir, module) {
+    	return module = {
+    		path: basedir,
+    		exports: {},
+    		require: function (path, base) {
+    			return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
+    		}
+    	}, fn(module, module.exports), module.exports;
+    }
+
+    function commonjsRequire () {
+    	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
+    }
+
+    var dateformat = createCommonjsModule(function (module, exports) {
+    function _typeof(obj){"@babel/helpers - typeof";if(typeof Symbol==="function"&&typeof Symbol.iterator==="symbol"){_typeof=function _typeof(obj){return typeof obj};}else {_typeof=function _typeof(obj){return obj&&typeof Symbol==="function"&&obj.constructor===Symbol&&obj!==Symbol.prototype?"symbol":typeof obj};}return _typeof(obj)}(function(global){var _arguments=arguments;var dateFormat=function(){var token=/d{1,4}|D{3,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|[LlopSZWN]|"[^"]*"|'[^']*'/g;var timezone=/\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g;var timezoneClip=/[^-+\dA-Z]/g;return function(date,mask,utc,gmt){if(_arguments.length===1&&kindOf(date)==="string"&&!/\d/.test(date)){mask=date;date=undefined;}date=date||date===0?date:new Date;if(!(date instanceof Date)){date=new Date(date);}if(isNaN(date)){throw TypeError("Invalid date")}mask=String(dateFormat.masks[mask]||mask||dateFormat.masks["default"]);var maskSlice=mask.slice(0,4);if(maskSlice==="UTC:"||maskSlice==="GMT:"){mask=mask.slice(4);utc=true;if(maskSlice==="GMT:"){gmt=true;}}var _=function _(){return utc?"getUTC":"get"};var _d=function d(){return date[_()+"Date"]()};var D=function D(){return date[_()+"Day"]()};var _m=function m(){return date[_()+"Month"]()};var y=function y(){return date[_()+"FullYear"]()};var _H=function H(){return date[_()+"Hours"]()};var _M=function M(){return date[_()+"Minutes"]()};var _s=function s(){return date[_()+"Seconds"]()};var _L=function L(){return date[_()+"Milliseconds"]()};var _o=function o(){return utc?0:date.getTimezoneOffset()};var _W=function W(){return getWeek(date)};var _N=function N(){return getDayOfWeek(date)};var flags={d:function d(){return _d()},dd:function dd(){return pad(_d())},ddd:function ddd(){return dateFormat.i18n.dayNames[D()]},DDD:function DDD(){return getDayName({y:y(),m:_m(),D:D(),_:_(),dayName:dateFormat.i18n.dayNames[D()],short:true})},dddd:function dddd(){return dateFormat.i18n.dayNames[D()+7]},DDDD:function DDDD(){return getDayName({y:y(),m:_m(),D:D(),_:_(),dayName:dateFormat.i18n.dayNames[D()+7]})},m:function m(){return _m()+1},mm:function mm(){return pad(_m()+1)},mmm:function mmm(){return dateFormat.i18n.monthNames[_m()]},mmmm:function mmmm(){return dateFormat.i18n.monthNames[_m()+12]},yy:function yy(){return String(y()).slice(2)},yyyy:function yyyy(){return pad(y(),4)},h:function h(){return _H()%12||12},hh:function hh(){return pad(_H()%12||12)},H:function H(){return _H()},HH:function HH(){return pad(_H())},M:function M(){return _M()},MM:function MM(){return pad(_M())},s:function s(){return _s()},ss:function ss(){return pad(_s())},l:function l(){return pad(_L(),3)},L:function L(){return pad(Math.floor(_L()/10))},t:function t(){return _H()<12?dateFormat.i18n.timeNames[0]:dateFormat.i18n.timeNames[1]},tt:function tt(){return _H()<12?dateFormat.i18n.timeNames[2]:dateFormat.i18n.timeNames[3]},T:function T(){return _H()<12?dateFormat.i18n.timeNames[4]:dateFormat.i18n.timeNames[5]},TT:function TT(){return _H()<12?dateFormat.i18n.timeNames[6]:dateFormat.i18n.timeNames[7]},Z:function Z(){return gmt?"GMT":utc?"UTC":(String(date).match(timezone)||[""]).pop().replace(timezoneClip,"").replace(/GMT\+0000/g,"UTC")},o:function o(){return (_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60)*100+Math.abs(_o())%60,4)},p:function p(){return (_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60),2)+":"+pad(Math.floor(Math.abs(_o())%60),2)},S:function S(){return ["th","st","nd","rd"][_d()%10>3?0:(_d()%100-_d()%10!=10)*_d()%10]},W:function W(){return _W()},N:function N(){return _N()}};return mask.replace(token,function(match){if(match in flags){return flags[match]()}return match.slice(1,match.length-1)})}}();dateFormat.masks={default:"ddd mmm dd yyyy HH:MM:ss",shortDate:"m/d/yy",paddedShortDate:"mm/dd/yyyy",mediumDate:"mmm d, yyyy",longDate:"mmmm d, yyyy",fullDate:"dddd, mmmm d, yyyy",shortTime:"h:MM TT",mediumTime:"h:MM:ss TT",longTime:"h:MM:ss TT Z",isoDate:"yyyy-mm-dd",isoTime:"HH:MM:ss",isoDateTime:"yyyy-mm-dd'T'HH:MM:sso",isoUtcDateTime:"UTC:yyyy-mm-dd'T'HH:MM:ss'Z'",expiresHeaderFormat:"ddd, dd mmm yyyy HH:MM:ss Z"};dateFormat.i18n={dayNames:["Sun","Mon","Tue","Wed","Thu","Fri","Sat","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],monthNames:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","January","February","March","April","May","June","July","August","September","October","November","December"],timeNames:["a","p","am","pm","A","P","AM","PM"]};var pad=function pad(val,len){val=String(val);len=len||2;while(val.length<len){val="0"+val;}return val};var getDayName=function getDayName(_ref){var y=_ref.y,m=_ref.m,D=_ref.D,_=_ref._,dayName=_ref.dayName,_ref$short=_ref["short"],_short=_ref$short===void 0?false:_ref$short;var today=new Date;var yesterday=new Date;yesterday.setDate(yesterday[_+"Date"]()-1);var tomorrow=new Date;tomorrow.setDate(tomorrow[_+"Date"]()+1);var today_D=function today_D(){return today[_+"Day"]()};var today_m=function today_m(){return today[_+"Month"]()};var today_y=function today_y(){return today[_+"FullYear"]()};var yesterday_D=function yesterday_D(){return yesterday[_+"Day"]()};var yesterday_m=function yesterday_m(){return yesterday[_+"Month"]()};var yesterday_y=function yesterday_y(){return yesterday[_+"FullYear"]()};var tomorrow_D=function tomorrow_D(){return tomorrow[_+"Day"]()};var tomorrow_m=function tomorrow_m(){return tomorrow[_+"Month"]()};var tomorrow_y=function tomorrow_y(){return tomorrow[_+"FullYear"]()};if(today_y()===y&&today_m()===m&&today_D()===D){return _short?"Tdy":"Today"}else if(yesterday_y()===y&&yesterday_m()===m&&yesterday_D()===D){return _short?"Ysd":"Yesterday"}else if(tomorrow_y()===y&&tomorrow_m()===m&&tomorrow_D()===D){return _short?"Tmw":"Tomorrow"}return dayName};var getWeek=function getWeek(date){var targetThursday=new Date(date.getFullYear(),date.getMonth(),date.getDate());targetThursday.setDate(targetThursday.getDate()-(targetThursday.getDay()+6)%7+3);var firstThursday=new Date(targetThursday.getFullYear(),0,4);firstThursday.setDate(firstThursday.getDate()-(firstThursday.getDay()+6)%7+3);var ds=targetThursday.getTimezoneOffset()-firstThursday.getTimezoneOffset();targetThursday.setHours(targetThursday.getHours()-ds);var weekDiff=(targetThursday-firstThursday)/(864e5*7);return 1+Math.floor(weekDiff)};var getDayOfWeek=function getDayOfWeek(date){var dow=date.getDay();if(dow===0){dow=7;}return dow};var kindOf=function kindOf(val){if(val===null){return "null"}if(val===undefined){return "undefined"}if(_typeof(val)!=="object"){return _typeof(val)}if(Array.isArray(val)){return "array"}return {}.toString.call(val).slice(8,-1).toLowerCase()};if((_typeof(exports))==="object"){module.exports=dateFormat;}else {global.dateFormat=dateFormat;}})(void 0);
+    });
+
     async function loadInitClockIn(evieCoin, address) {
         try {
-            console.log(address, evieCoin);
             const startTimeEth = await evieCoin.methods.clock_in_times(address).call();
             const startTime = ethTimestampToDate(startTimeEth);
-            console.log(startTime);
-            UserInfoWriteable.update((u) => {
+            StudentInfoStore.update((u) => {
                 return Object.assign(Object.assign({}, u), { startTime });
             });
         }
@@ -7191,6 +8492,13 @@ var app = (function () {
             console.error(error);
             throw "Error getting initial clock in time";
         }
+    }
+    async function loadBal(evieCoin, address) {
+        const bal = await evieCoin.methods.balanceOf(address).call();
+        StudentInfoStore.update((u) => {
+            return Object.assign(Object.assign({}, u), { address,
+                bal });
+        });
     }
     async function loadInitClockOut(evieCoin, address) {
         let endTime;
@@ -7203,7 +8511,7 @@ var app = (function () {
             const mostRecent = pastevents[pastevents.length - 1];
             // Date is returned in seconds, needs to be changed to millis
             endTime = ethTimestampToDate(mostRecent.returnValues.timestamp);
-            UserInfoWriteable.update((u) => {
+            StudentInfoStore.update((u) => {
                 return Object.assign(Object.assign({}, u), { endTime });
             });
         }
@@ -7212,17 +8520,14 @@ var app = (function () {
             throw "Error getting initial clock in time";
         }
     }
-    async function setEventListeners(evieCoin, address) {
-        evieCoin.events.ClockInTimeEvent({ user: address }, clockInListener);
-        evieCoin.events.ClockOutTimeEvent({ user: address }, clockOutListener);
-        evieCoin.events.PayoutMadeEvent({ _to: address }, payoutListener);
-    }
 
-    /* src/App.svelte generated by Svelte v3.31.2 */
-    const file = "src/App.svelte";
+    /* src/Pages/StudentPage.svelte generated by Svelte v3.31.2 */
 
-    // (69:2) {:else}
-    function create_else_block(ctx) {
+    const { console: console_1$1 } = globals;
+    const file$1 = "src/Pages/StudentPage.svelte";
+
+    // (53:0) {:else}
+    function create_else_block$1(ctx) {
     	let t;
 
     	const block = {
@@ -7240,46 +8545,38 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block.name,
+    		id: create_else_block$1.name,
     		type: "else",
-    		source: "(69:2) {:else}",
+    		source: "(53:0) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (43:2) {#if connected}
-    function create_if_block(ctx) {
+    // (35:0) {#if connected}
+    function create_if_block$1(ctx) {
     	let div1;
     	let div0;
     	let p0;
     	let t0;
-    	let t1_value = weiToCoinNumber(/*$UserInfoStore*/ ctx[1].bal) + "";
+    	let t1_value = weiToCoinNumber(/*$StudentInfoStore*/ ctx[1].bal || 0) + "";
     	let t1;
     	let t2;
     	let div5;
     	let div2;
     	let p1;
-
-    	let t3_value = (/*$UserInfoStore*/ ctx[1].endTime
-    	? `Your clock out time: ${dateformat(/*$UserInfoStore*/ ctx[1].endTime, constants.dateFormatStr)}`
-    	: "Looks like you have no last end time") + "";
-
     	let t3;
-    	let t4;
-    	let p2;
-    	let t5;
 
-    	let t6_value = (/*$UserInfoStore*/ ctx[1].startTime && /*$UserInfoStore*/ ctx[1].startTime.getTime() !== new Date(0).getTime()
-    	? dateformat(/*$UserInfoStore*/ ctx[1].startTime, constants.dateFormatStr)
+    	let t4_value = (/*$StudentInfoStore*/ ctx[1].startTime && /*$StudentInfoStore*/ ctx[1].startTime.getTime() !== new Date(0).getTime()
+    	? dateformat(/*$StudentInfoStore*/ ctx[1].startTime, constants.dateFormatStr)
     	: "Please clock in to see your start time") + "";
 
-    	let t6;
-    	let t7;
+    	let t4;
+    	let t5;
     	let div3;
     	let button0;
-    	let t9;
+    	let t7;
     	let div4;
     	let button1;
     	let mounted;
@@ -7296,36 +8593,32 @@ var app = (function () {
     			div5 = element("div");
     			div2 = element("div");
     			p1 = element("p");
-    			t3 = text(t3_value);
-    			t4 = space();
-    			p2 = element("p");
-    			t5 = text("Start time: ");
-    			t6 = text(t6_value);
-    			t7 = space();
+    			t3 = text("Start time: ");
+    			t4 = text(t4_value);
+    			t5 = space();
     			div3 = element("div");
     			button0 = element("button");
     			button0.textContent = "Clock in";
-    			t9 = space();
+    			t7 = space();
     			div4 = element("div");
     			button1 = element("button");
     			button1.textContent = "Clock out";
-    			add_location(p0, file, 45, 8, 1756);
+    			add_location(p0, file$1, 37, 6, 1012);
     			attr_dev(div0, "class", "col-8");
-    			add_location(div0, file, 44, 6, 1728);
+    			add_location(div0, file$1, 36, 4, 986);
     			attr_dev(div1, "class", "row");
-    			add_location(div1, file, 43, 4, 1704);
-    			add_location(p1, file, 50, 8, 1903);
-    			add_location(p2, file, 58, 8, 2164);
+    			add_location(div1, file$1, 35, 2, 964);
+    			add_location(p1, file$1, 42, 6, 1157);
     			attr_dev(div2, "class", "col-4");
-    			add_location(div2, file, 49, 6, 1875);
-    			add_location(button0, file, 65, 25, 2473);
+    			add_location(div2, file$1, 41, 4, 1131);
+    			add_location(button0, file$1, 49, 23, 1461);
     			attr_dev(div3, "class", "col-4");
-    			add_location(div3, file, 65, 6, 2454);
-    			add_location(button1, file, 66, 25, 2549);
+    			add_location(div3, file$1, 49, 4, 1442);
+    			add_location(button1, file$1, 50, 23, 1535);
     			attr_dev(div4, "class", "col-4");
-    			add_location(div4, file, 66, 6, 2530);
+    			add_location(div4, file$1, 50, 4, 1516);
     			attr_dev(div5, "class", "row");
-    			add_location(div5, file, 48, 4, 1851);
+    			add_location(div5, file$1, 40, 2, 1109);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -7338,14 +8631,11 @@ var app = (function () {
     			append_dev(div5, div2);
     			append_dev(div2, p1);
     			append_dev(p1, t3);
-    			append_dev(div2, t4);
-    			append_dev(div2, p2);
-    			append_dev(p2, t5);
-    			append_dev(p2, t6);
-    			append_dev(div5, t7);
+    			append_dev(p1, t4);
+    			append_dev(div5, t5);
     			append_dev(div5, div3);
     			append_dev(div3, button0);
-    			append_dev(div5, t9);
+    			append_dev(div5, t7);
     			append_dev(div5, div4);
     			append_dev(div4, button1);
 
@@ -7359,15 +8649,11 @@ var app = (function () {
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$UserInfoStore*/ 2 && t1_value !== (t1_value = weiToCoinNumber(/*$UserInfoStore*/ ctx[1].bal) + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$StudentInfoStore*/ 2 && t1_value !== (t1_value = weiToCoinNumber(/*$StudentInfoStore*/ ctx[1].bal || 0) + "")) set_data_dev(t1, t1_value);
 
-    			if (dirty & /*$UserInfoStore*/ 2 && t3_value !== (t3_value = (/*$UserInfoStore*/ ctx[1].endTime
-    			? `Your clock out time: ${dateformat(/*$UserInfoStore*/ ctx[1].endTime, constants.dateFormatStr)}`
-    			: "Looks like you have no last end time") + "")) set_data_dev(t3, t3_value);
-
-    			if (dirty & /*$UserInfoStore*/ 2 && t6_value !== (t6_value = (/*$UserInfoStore*/ ctx[1].startTime && /*$UserInfoStore*/ ctx[1].startTime.getTime() !== new Date(0).getTime()
-    			? dateformat(/*$UserInfoStore*/ ctx[1].startTime, constants.dateFormatStr)
-    			: "Please clock in to see your start time") + "")) set_data_dev(t6, t6_value);
+    			if (dirty & /*$StudentInfoStore*/ 2 && t4_value !== (t4_value = (/*$StudentInfoStore*/ ctx[1].startTime && /*$StudentInfoStore*/ ctx[1].startTime.getTime() !== new Date(0).getTime()
+    			? dateformat(/*$StudentInfoStore*/ ctx[1].startTime, constants.dateFormatStr)
+    			: "Please clock in to see your start time") + "")) set_data_dev(t4, t4_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
@@ -7380,21 +8666,21 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block.name,
+    		id: create_if_block$1.name,
     		type: "if",
-    		source: "(43:2) {#if connected}",
+    		source: "(35:0) {#if connected}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment(ctx) {
-    	let div;
+    function create_fragment$3(ctx) {
+    	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*connected*/ ctx[0]) return create_if_block;
-    		return create_else_block;
+    		if (/*connected*/ ctx[0]) return create_if_block$1;
+    		return create_else_block$1;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -7402,17 +8688,15 @@ var app = (function () {
 
     	const block = {
     		c: function create() {
-    			div = element("div");
     			if_block.c();
-    			attr_dev(div, "class", "container");
-    			add_location(div, file, 41, 0, 1658);
+    			if_block_anchor = empty();
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			if_block.m(div, null);
+    			if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
     		},
     		p: function update(ctx, [dirty]) {
     			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
@@ -7423,21 +8707,21 @@ var app = (function () {
 
     				if (if_block) {
     					if_block.c();
-    					if_block.m(div, null);
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
     				}
     			}
     		},
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			if_block.d();
+    			if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment.name,
+    		id: create_fragment$3.name,
     		type: "component",
     		source: "",
     		ctx
@@ -7446,13 +8730,249 @@ var app = (function () {
     	return block;
     }
 
-    function instance($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let $APIStore;
-    	let $UserInfoStore;
+    	let $StudentInfoStore;
     	validate_store(APIStore, "APIStore");
-    	component_subscribe($$self, APIStore, $$value => $$invalidate(5, $APIStore = $$value));
-    	validate_store(UserInfoStore, "UserInfoStore");
-    	component_subscribe($$self, UserInfoStore, $$value => $$invalidate(1, $UserInfoStore = $$value));
+    	component_subscribe($$self, APIStore, $$value => $$invalidate(4, $APIStore = $$value));
+    	validate_store(StudentInfoStore, "StudentInfoStore");
+    	component_subscribe($$self, StudentInfoStore, $$value => $$invalidate(1, $StudentInfoStore = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("StudentPage", slots, []);
+    	let connected;
+
+    	onMount(async () => {
+    		const { EvieCoin, address } = $APIStore;
+    		console.log($APIStore);
+
+    		const proms = [
+    			loadInitClockIn(EvieCoin, address),
+    			loadInitClockOut(EvieCoin, address),
+    			loadBal(EvieCoin, address)
+    		];
+
+    		await Promise.all(proms);
+    		$$invalidate(0, connected = true);
+    	});
+
+    	async function clockIn() {
+    		await $APIStore.EvieCoin.methods.clockStartTime().send({ from: $StudentInfoStore.address });
+    	}
+
+    	async function clockOut() {
+    		await $APIStore.EvieCoin.methods.clockEndTime().send({ from: $StudentInfoStore.address });
+    	}
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<StudentPage> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		weiToCoinNumber,
+    		constants,
+    		APIStore,
+    		StudentInfoStore,
+    		dateformat,
+    		onMount,
+    		loadBal,
+    		loadInitClockIn,
+    		loadInitClockOut,
+    		connected,
+    		clockIn,
+    		clockOut,
+    		$APIStore,
+    		$StudentInfoStore
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("connected" in $$props) $$invalidate(0, connected = $$props.connected);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [connected, $StudentInfoStore, clockIn, clockOut];
+    }
+
+    class StudentPage extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "StudentPage",
+    			options,
+    			id: create_fragment$3.name
+    		});
+    	}
+    }
+
+    /* src/App.svelte generated by Svelte v3.31.2 */
+    const file$2 = "src/App.svelte";
+
+    // (37:2) {:else}
+    function create_else_block$2(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$2.name,
+    		type: "else",
+    		source: "(37:2) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (35:2) {#if connected}
+    function create_if_block$2(ctx) {
+    	let router;
+    	let current;
+
+    	router = new Router({
+    			props: { routes: /*routes*/ ctx[1] },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			create_component(router.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(router, target, anchor);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(router.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(router.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(router, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$2.name,
+    		type: "if",
+    		source: "(35:2) {#if connected}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$4(ctx) {
+    	let div;
+    	let current_block_type_index;
+    	let if_block;
+    	let current;
+    	const if_block_creators = [create_if_block$2, create_else_block$2];
+    	const if_blocks = [];
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*connected*/ ctx[0]) return 0;
+    		return 1;
+    	}
+
+    	current_block_type_index = select_block_type(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			if_block.c();
+    			attr_dev(div, "class", "container");
+    			add_location(div, file$2, 33, 0, 1450);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			if_blocks[current_block_type_index].m(div, null);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			let previous_block_index = current_block_type_index;
+    			current_block_type_index = select_block_type(ctx);
+
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
+    				group_outros();
+
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+
+    				check_outros();
+    				if_block = if_blocks[current_block_type_index];
+
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
+    				} else {
+    					if_block.p(ctx, dirty);
+    				}
+
+    				transition_in(if_block, 1);
+    				if_block.m(div, null);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			if_blocks[current_block_type_index].d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$4.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$4($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("App", slots, []);
 
@@ -7492,29 +9012,23 @@ var app = (function () {
     			});
     	};
 
-    	
-    	let storageValue;
     	let connected = false;
     	let web3;
 
     	onMount(() => __awaiter(void 0, void 0, void 0, function* () {
-    		const instance = yield loadWeb3();
-    		window["web3"] = web3 = instance;
-    		yield initEvieCoin(web3);
+    		if (!connected) {
+    			const instance = yield loadWeb3();
+    			yield initEvieCoin(instance);
+    		}
+
     		$$invalidate(0, connected = true);
     	}));
 
-    	function clockIn() {
-    		return __awaiter(this, void 0, void 0, function* () {
-    			yield $APIStore.EvieCoin.methods.clockStartTime().send({ from: $UserInfoStore.address });
-    		});
-    	}
-
-    	function clockOut() {
-    		return __awaiter(this, void 0, void 0, function* () {
-    			yield $APIStore.EvieCoin.methods.clockEndTime().send({ from: $UserInfoStore.address });
-    		});
-    	}
+    	const routes = {
+    		"/": SelectUserTypePage,
+    		"/student": StudentPage,
+    		"/supervisor": SupervisorPage
+    	};
 
     	const writable_props = [];
 
@@ -7524,26 +9038,22 @@ var app = (function () {
 
     	$$self.$capture_state = () => ({
     		__awaiter,
-    		dateformat,
+    		Router,
     		loadWeb3,
     		onMount,
-    		constants,
-    		APIStore,
     		initEvieCoin,
-    		UserInfoStore,
-    		weiToCoinNumber,
-    		storageValue,
+    		APIStore,
+    		StudentInfoStore,
+    		SelectUserTypePage,
+    		SupervisorPage,
+    		StudentPage,
     		connected,
     		web3,
-    		clockIn,
-    		clockOut,
-    		$APIStore,
-    		$UserInfoStore
+    		routes
     	});
 
     	$$self.$inject_state = $$props => {
     		if ("__awaiter" in $$props) __awaiter = $$props.__awaiter;
-    		if ("storageValue" in $$props) storageValue = $$props.storageValue;
     		if ("connected" in $$props) $$invalidate(0, connected = $$props.connected);
     		if ("web3" in $$props) web3 = $$props.web3;
     	};
@@ -7552,19 +9062,19 @@ var app = (function () {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [connected, $UserInfoStore, clockIn, clockOut];
+    	return [connected, routes];
     }
 
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance, create_fragment, safe_not_equal, {});
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment.name
+    			id: create_fragment$4.name
     		});
     	}
     }

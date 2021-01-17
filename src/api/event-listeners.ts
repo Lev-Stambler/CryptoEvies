@@ -1,6 +1,6 @@
 import { ethTimestampToDate } from "../env/time";
 import { weiToCoinNumber } from "../utils/currency";
-import { UserInfoStore } from "./init";
+import { StudentInfoStore } from "./stores";
 
 function wrapper(f: Function) {
   return (err, event) => {
@@ -15,8 +15,7 @@ function wrapper(f: Function) {
 function _clockOutListener(event) {
   const { timestamp } = event.returnValues;
   let endTime = ethTimestampToDate(timestamp);
-  console.log(endTime)
-  UserInfoStore.update((u) => {
+  StudentInfoStore.update((u) => {
     return {
       ...u,
       endTime,
@@ -27,8 +26,7 @@ function _clockOutListener(event) {
 function _clockInListener(event) {
   const { timestamp } = event.returnValues;
   let startTime = ethTimestampToDate(timestamp);
-  console.log(startTime)
-  UserInfoStore.update((u) => {
+  StudentInfoStore.update((u) => {
     return {
       ...u,
       startTime,
@@ -37,10 +35,17 @@ function _clockInListener(event) {
 }
 
 function _payoutListener(event) {
-  const {value} = weiToCoinNumber(event.returnValues)
-  alert(`You just got paid out ${value}`)
+  const valWei = event.returnValues.value
+  const value = weiToCoinNumber(valWei);
+  StudentInfoStore.update((u) => {
+    return {
+      ...u,
+      bal: u.bal + valWei,
+    };
+  });
+  alert(`You just got paid out ${value}`);
 }
 
 export const clockInListener = wrapper(_clockInListener);
 export const clockOutListener = wrapper(_clockOutListener);
-export const payoutListener = wrapper(_payoutListener)
+export const payoutListener = wrapper(_payoutListener);

@@ -3,7 +3,7 @@ export interface IAPIStore {
   address: string
 }
 
-export interface IUserInfo {
+export interface IStudentInfo {
   bal: number;
   startTime: Date;
   endTime: Date;
