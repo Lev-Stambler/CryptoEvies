@@ -12,7 +12,7 @@ contract("EvieCoin", function (accounts) {
   });
 
   context("A student clocking in and out expectedly", async () => {
-    it("Should have a successful objective made", async () => {
+    xit("Should have a successful objective made", async () => {
 
       // Check initial balance
       let result = await instance.balanceOf(goodStudentBob, { from: goodStudentBob });
@@ -33,7 +33,7 @@ contract("EvieCoin", function (accounts) {
       assert.equal(result.toString(), web3.utils.toWei("1"));
     });
 
-    it("Should have failed the objective objective made", async () => {
+    xit("Should have failed the objective objective made", async () => {
       
       // Check initial balance
       let result = await instance.balanceOf(badStudentJimbo, { from: badStudentJimbo });

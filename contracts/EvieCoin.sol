@@ -11,7 +11,19 @@ contract EvieCoin is StudentColl {
     using SafeMath for uint256;
     using SafeMath for uint256;
 
-    constructor()
-        StudentColl()
-    {}
+    constructor() StudentColl() {}
+
+    function SupervisorApproveAll(address student) external {
+        for (uint256 i = 0; i < pendingCollectibleIds[student].length; i++) {
+            uint256 tokId = pendingCollectibleIds[student][i];
+            _safeMint(student, tokId);
+        }
+        delete pendingCollectibleIds[student];
+    }
+
+    function SupervisorApprove(address student, uint256 tokInd) public {
+        uint256 tokId = pendingCollectibleIds[student][tokInd];
+        removeFromPending(student, tokInd);
+        _safeMint(student, tokId);
+    }
 }

@@ -9,9 +9,10 @@ contract StudentColl is ERC721, Ownable {
     using SafeMath for uint256;
     using SafeMath for uint256;
     using Counters for Counters.Counter;
-        
+
     Counters.Counter private _tokenIds;
 
+    mapping(address => uint256[]) internal pendingCollectibleIds;
 
     /// @dev the clock in time for an account on a given day
     mapping(address => uint256) public clock_in_times;
@@ -55,7 +56,19 @@ contract StudentColl is ERC721, Ownable {
     function _payout(address _to) private {
         _tokenIds.increment();
         uint256 newTokId = _tokenIds.current();
-        _safeMint(_to, newTokId);
+        pendingCollectibleIds[_to].push(newTokId);
         emit PayoutMadeEvent(_to, newTokId);
+    }
+
+    function removeFromPending(address student, uint256 tokInd) internal {
+        require(
+            0 <= tokInd && tokInd < pendingCollectibleIds[student].length,
+            "The token index must be within range of the student's pending ids array"
+        );
+        uint256 lastElemInd = pendingCollectibleIds[student].length - 1;
+        pendingCollectibleIds[student][tokInd] = pendingCollectibleIds[student][
+            lastElemInd
+        ];
+        pendingCollectibleIds[student].pop();
     }
 }
