@@ -4,8 +4,9 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "./StudentAndSup.sol";
 
-contract StudentColl is ERC721, Ownable {
+contract StudentColl is ERC721, Ownable, StudentAndSup {
     using SafeMath for uint256;
     using SafeMath for uint256;
     using Counters for Counters.Counter;
@@ -31,19 +32,23 @@ contract StudentColl is ERC721, Ownable {
     event ClockInTimeEvent(address indexed user, uint256 timestamp);
     event ClockOutTimeEvent(address indexed user, uint256 timestamp);
 
-    constructor() ERC721("StudentColl", "STU") {
+    constructor() ERC721("StudentColl", "STU") StudentAndSup() {
         transferOwnership(msg.sender);
     }
 
+    function getPendingCollectibles(address student) view external returns(uint256[] memory) {
+        return pendingCollectibleIds[student];
+    }
+
     /// @dev a user clocks in their start time
-    function clockStartTime() public _once_per_day {
+    function clockStartTime() public _once_per_day _is_student {
         clock_in_times[msg.sender] = block.timestamp;
         last_clock_in_day[msg.sender] = uint16(block.timestamp.div(1 days));
         emit ClockInTimeEvent(msg.sender, block.timestamp);
     }
 
     // Not exact, it is off by a few minutes?
-    function clockEndTime() public {
+    function clockEndTime() public _is_student {
         uint256 end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
         if (end_time.sub(clock_in_times[msg.sender]) <= 1 hours) {
@@ -53,7 +58,7 @@ contract StudentColl is ERC721, Ownable {
         emit ClockOutTimeEvent(msg.sender, block.timestamp);
     }
 
-    function _payout(address _to) private {
+    function _payout(address _to) private _is_student {
         _tokenIds.increment();
         uint256 newTokId = _tokenIds.current();
         pendingCollectibleIds[_to].push(newTokId);

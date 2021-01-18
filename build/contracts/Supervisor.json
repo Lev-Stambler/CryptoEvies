@@ -1,0 +1,125 @@
+{
+  "contractName": "Supervisor",
+  "abi": [],
+  "metadata": "{\"compiler\":{\"version\":\"0.7.0+commit.9e61f92b\"},\"language\":\"Solidity\",\"output\":{\"abi\":[],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol\":\"Supervisor\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol\":{\"keccak256\":\"0x25476ebc2cc728e1318dafbfbd93ed25e28473855a43dcb10195eeaf06f2c1e5\",\"urls\":[\"bzz-raw://9d581cc78c3618cbdf85c11fd97ea182c376542d78f802e77e77731269bd6948\",\"dweb:/ipfs/QmRM51ZJtFUjEyMsomGVfqGtvfSqdCikM78a3xmjC8AmUX\"]}},\"version\":1}",
+  "bytecode": "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220635d3a7a9e95224cf5b2f1df53389d88ae689b64b618f2a8a24111ea557d5b7164736f6c63430007000033",
+  "deployedBytecode": "0x6080604052600080fdfea2646970667358221220635d3a7a9e95224cf5b2f1df53389d88ae689b64b618f2a8a24111ea557d5b7164736f6c63430007000033",
+  "immutableReferences": {},
+  "sourceMap": "25:24:3:-:0;;;;;;;;;;;;;;;;;;;",
+  "deployedSourceMap": "25:24:3:-:0;;;;;",
+  "source": "pragma solidity ^0.7.0;\n\ncontract Supervisor {\n\n}",
+  "sourcePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
+  "ast": {
+    "absolutePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
+    "exportedSymbols": {
+      "Supervisor": [
+        389
+      ]
+    },
+    "id": 390,
+    "license": null,
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 388,
+        "literals": [
+          "solidity",
+          "^",
+          "0.7",
+          ".0"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "0:23:3"
+      },
+      {
+        "abstract": false,
+        "baseContracts": [],
+        "contractDependencies": [],
+        "contractKind": "contract",
+        "documentation": null,
+        "fullyImplemented": true,
+        "id": 389,
+        "linearizedBaseContracts": [
+          389
+        ],
+        "name": "Supervisor",
+        "nodeType": "ContractDefinition",
+        "nodes": [],
+        "scope": 390,
+        "src": "25:24:3"
+      }
+    ],
+    "src": "0:49:3"
+  },
+  "legacyAST": {
+    "attributes": {
+      "absolutePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
+      "exportedSymbols": {
+        "Supervisor": [
+          389
+        ]
+      },
+      "license": null
+    },
+    "children": [
+      {
+        "attributes": {
+          "literals": [
+            "solidity",
+            "^",
+            "0.7",
+            ".0"
+          ]
+        },
+        "id": 388,
+        "name": "PragmaDirective",
+        "src": "0:23:3"
+      },
+      {
+        "attributes": {
+          "abstract": false,
+          "baseContracts": [
+            null
+          ],
+          "contractDependencies": [
+            null
+          ],
+          "contractKind": "contract",
+          "documentation": null,
+          "fullyImplemented": true,
+          "linearizedBaseContracts": [
+            389
+          ],
+          "name": "Supervisor",
+          "nodes": [
+            null
+          ],
+          "scope": 390
+        },
+        "id": 389,
+        "name": "ContractDefinition",
+        "src": "25:24:3"
+      }
+    ],
+    "id": 390,
+    "name": "SourceUnit",
+    "src": "0:49:3"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.7.0+commit.9e61f92b.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "3.3.3",
+  "updatedAt": "2021-01-17T23:48:38.907Z",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  }
+}

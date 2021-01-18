@@ -26,4 +26,5 @@ contract EvieCoin is StudentColl {
         removeFromPending(student, tokInd);
         _safeMint(student, tokId);
     }
+
 }
