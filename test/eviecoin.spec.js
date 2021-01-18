@@ -16,12 +16,16 @@ contract("EvieCoin", function (accounts) {
     instance = await EvieCoin.deployed();
 
     async function createStudent(studentAddr, supAddr = supervisorGeorge) {
-      let result = await instance.getSupsStudents(supervisorGeorge);
+      let result = await instance.getSupsStudents(supAddr);
       const priorLen = result.length;
-      result = await instance.potentialStudentAllowSup(supAddr, { from: studentAddr });
+      result = await instance.potentialStudentAllowSup(supAddr, {
+        from: studentAddr,
+      });
       assert.equal(result.receipt.status, true);
 
-      result = await instance.initStudent(supervisorGeorge, { from: studentAddr });
+      result = await instance.potentialSupApproveStudent(studentAddr, {
+        from: supAddr,
+      });
       assert.equal(result.receipt.status, true);
       result = await instance.getSupsStudents(supervisorGeorge);
       assert.equal(result.length, priorLen + 1);
@@ -32,12 +36,17 @@ contract("EvieCoin", function (accounts) {
   });
 
   context("A student clocking in and out expectedly", async () => {
-    it("Should have a successful objective made", async () => {
+    // TODO: have a fn for clock in clock out with time as param. Make this fn call that
+    async function successfulStudent(studentAddr) {
       // Check initial balance
       let result = await instance.balanceOf(goodStudentBob, {
         from: goodStudentBob,
       });
-      assert.equal(result.toString(), web3.utils.toWei("0"));
+      const initBal = result;
+
+      const initPendingNumb = await instance.getPendingCollectibles(
+        goodStudentBob
+      );
 
       // Clock in
       result = await instance.clockStartTime({ from: goodStudentBob });
@@ -50,14 +59,24 @@ contract("EvieCoin", function (accounts) {
       result = await instance.clockEndTime({ from: goodStudentBob });
       assert.equal(result.receipt.status, true);
 
+      // ensure that the balance does not change
       result = await instance.balanceOf(goodStudentBob, {
         from: goodStudentBob,
       });
-      assert.equal(result.toString(), web3.utils.toWei("0"));
+      assert.equal(result.toString(), initBal.toString());
+      return { initBal, initPendingNumb };
+    }
 
-      result = await instance.getPendingCollectibles(goodStudentBob);
-      assert.equal(result.length, 1);
+    it("Should have a successful objective made, with the supervisor approving the pending transaction", async () => {
+      const { initBal, initPendingNumb } = await successfulStudent(
+        goodStudentBob
+      );
+      assert.equal(initPendingNumb, 0);
+      let result = await instance.getPendingCollectibles(goodStudentBob);
+      assert.equal(result.length, initPendingNumb + 1);
     });
+
+    xit("Should have a successful objective made, with the supervisor disapproving the pending transaction", async () => {});
 
     it("Should have failed the objective objective made", async () => {
       // Check initial balance
@@ -91,4 +110,8 @@ contract("EvieCoin", function (accounts) {
   context("Check edge cases/ faulty sends", async () => {
     xit("Only one clock out can be made per day", async () => {});
   });
+
+  xcontext("Check edge cases/ faulty case for student sup interaction", async () => {
+
+  })
 });

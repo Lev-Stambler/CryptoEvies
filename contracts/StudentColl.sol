@@ -5,11 +5,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./StudentAndSup.sol";
+import "./utils/RArrUint256.sol";
 
 contract StudentColl is ERC721, Ownable, StudentAndSup {
     using SafeMath for uint256;
     using SafeMath for uint256;
     using Counters for Counters.Counter;
+    using RArrUint256 for uint256[];
 
     Counters.Counter private _tokenIds;
 
@@ -70,10 +72,6 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
             0 <= tokInd && tokInd < pendingCollectibleIds[student].length,
             "The token index must be within range of the student's pending ids array"
         );
-        uint256 lastElemInd = pendingCollectibleIds[student].length - 1;
-        pendingCollectibleIds[student][tokInd] = pendingCollectibleIds[student][
-            lastElemInd
-        ];
-        pendingCollectibleIds[student].pop();
+        pendingCollectibleIds[student].removeInd(tokInd);
     }
 }
