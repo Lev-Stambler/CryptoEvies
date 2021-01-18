@@ -16,20 +16,47 @@ contract("EvieCoin", function (accounts) {
     instance = await EvieCoin.deployed();
 
     async function createStudent(studentAddr, supAddr = supervisorGeorge) {
-      let result = await instance.getSupsStudents(supAddr);
-      const priorLen = result.length;
-      result = await instance.potentialStudentAllowSup(supAddr, {
+      let [potStudents, inds] = Object.entries(
+        await instance.getSupsPotentialStudents({
+          from: supAddr,
+        })
+      );
+      const priorPotentialNumbStudents = potStudents.length;
+
+      let result = await instance.getSupsStudents({ from: supAddr });
+
+      const priorNumbStudents = result.length;
+
+      result = await instance.createPotentialStudent(supAddr, {
         from: studentAddr,
       });
       assert.equal(result.receipt.status, true);
 
-      result = await instance.potentialSupApproveStudent(studentAddr, {
+      result = await instance.getSupsPotentialStudents({
         from: supAddr,
       });
+      console.log(result)
+      potStudents = result[0];
+      inds = result[1];
+      assert.equal(
+        potStudents.length,
+        priorPotentialNumbStudents + 1,
+        "Adding a potential student should have increased the sup's pending students by 1"
+      );
+
+      result = await instance.potentialSupApproveStudent(
+        inds[inds.length - 1],
+        {
+          from: supAddr,
+        }
+      );
       assert.equal(result.receipt.status, true);
-      result = await instance.getSupsStudents(supervisorGeorge);
-      assert.equal(result.length, priorLen + 1);
-      assert.equal(studentAddr.toString(), result[priorLen].toString());
+      result = await instance.getSupsStudents({ from: supAddr });
+      assert.equal(result.length, priorNumbStudents + 1);
+      assert.equal(
+        studentAddr.toString(),
+        result[priorNumbStudents].student.toString()
+      );
     }
     await createStudent(goodStudentBob);
     await createStudent(badStudentJimbo);
@@ -111,7 +138,8 @@ contract("EvieCoin", function (accounts) {
     xit("Only one clock out can be made per day", async () => {});
   });
 
-  xcontext("Check edge cases/ faulty case for student sup interaction", async () => {
-
-  })
+  xcontext(
+    "Check edge cases/ faulty case for student sup interaction",
+    async () => {}
+  );
 });

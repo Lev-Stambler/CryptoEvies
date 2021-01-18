@@ -13,10 +13,11 @@ contract StudentAndSup is Ownable {
     ///@dev all initialized students
     address[] private students;
 
-    mapping(address => uint256) private supervisorNumbStudents;
+    ///@dev all pending students
+    address[] private pendingStudents;
 
     ///@dev a mapping of potential students to potential supervisors who they approved
-    mapping(address => address) private potentialStudentToApprovedSup;
+    mapping(address => address) private pendingStudentToApprovedSup;
 
     ///@dev all initialized students mapped to their supervisor.
     mapping(address => address) private studentToSupervisor;
@@ -27,61 +28,103 @@ contract StudentAndSup is Ownable {
         _;
     }
 
+    modifier _is_not_pending() {
+        for (uint256 i = 0; i < pendingStudents.length; i++) {
+            if (pendingStudents[i] == msg.sender) {
+                require(false, "Student must not be a pending student");
+            }
+        }
+        _;
+    }
+
     constructor() {}
 
-    function potentialStudentAllowSup(address supervisor) external {
+    /// @param supervisor - The student's desired supervisor
+    /// @dev msg.sender is the student's address
+    function createPotentialStudent(address supervisor)
+        external
+        _is_not_pending
+    {
         require(
             studentToSupervisor[msg.sender] == address(0),
             "Student cannot already have a supervisor"
         );
-        potentialStudentToApprovedSup[msg.sender] = supervisor;
-        // TODO: add student to potential student array
+        pendingStudentToApprovedSup[msg.sender] = supervisor;
+        pendingStudents.push(msg.sender);
     }
 
-    function potentialSupApproveStudent(address student) external {
-        initStudent(student);
+    function potentialSupApproveStudent(uint256 pendingStudentInd) external {
+        initStudent(pendingStudentInd);
     }
 
-    /// @dev msg.sender is the student
-    function initStudent(address student) private {
+    /// @dev msg.sender is the supervisor
+    function initStudent(uint256 pendingStudentInd) private {
+        address student = pendingStudents[pendingStudentInd];
         require(
             studentToSupervisor[student] == address(0),
             "Student cannot already have a supervisor"
         );
         require(
-            potentialStudentToApprovedSup[student] == msg.sender,
-            "Student must have approved this supervisor"
+            pendingStudentToApprovedSup[student] == msg.sender,
+            "Student must have set this supervisor"
         );
 
         studentToSupervisor[student] = msg.sender;
-        supervisorNumbStudents[msg.sender]++;
         students.push(student);
-        // TODO: delete student from potential student array
-        delete potentialStudentToApprovedSup[student];
+        pendingStudents.removeInd(pendingStudentInd);
+        delete pendingStudentToApprovedSup[student];
     }
 
-    function getSupsStudents(address supervisor)
+    function getSupsStudents()
         external
         view
-        returns (address[] memory)
+        returns (address[] memory, uint256[] memory)
     {
-        address[] memory supsStudents =
-            new address[](supervisorNumbStudents[supervisor]);
-        uint256 counter = 0;
-        for (uint256 i = 0; i < students.length; i = i.add(1)) {
-            if (studentToSupervisor[students[i]] == supervisor) {
-                supsStudents[counter] = students[i];
-                counter = counter.add(1);
+        return getStudentsPerSup(students, studentToSupervisor, msg.sender);
+    }
+
+    function getSupsPotentialStudents()
+        external
+        view
+        returns (address[] memory, uint256[] memory)
+    {
+        return
+            getStudentsPerSup(
+                pendingStudents,
+                pendingStudentToApprovedSup,
+                msg.sender
+            );
+    }
+
+    function getStudentsPerSup(
+        address[] storage _students,
+        mapping(address => address) storage _studentToSup,
+        address supervisor
+    ) private view returns (address[] memory, uint256[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < _students.length; i = i.add(1)) {
+            address student = _students[i];
+            if (_studentToSup[student] == supervisor) {
+                count = count.add(1);
             }
         }
-        return supsStudents;
-    }
+        address[] memory supsStudents = new address[](count);
+        uint256[] memory supsStudentsInds = new uint256[](count);
 
-    function getSupsPotentialStudents(address supervisor)
-        external
-        view
-        returns (address[] memory)
-    {
-      // TODO: implement me! Also add mapping for # of potential students
+        uint256 x = 0;
+        for (uint256 i = 0; i < _students.length; i = i.add(1)) {
+            address student = _students[i];
+            if (_studentToSup[student] == supervisor) {
+                supsStudents[x] = student;
+                supsStudentsInds[x] = i;
+                x = x.add(1);
+                // TODO: test the following!
+                // account for case where another student is added mid function call
+                if (count <= x) {
+                    return (supsStudents, supsStudentsInds);
+                }
+            }
+        }
+        return (supsStudents, supsStudentsInds);
     }
 }
