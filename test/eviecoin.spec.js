@@ -16,16 +16,17 @@ contract("EvieCoin", function (accounts) {
     instance = await EvieCoin.deployed();
 
     async function createStudent(studentAddr, supAddr = supervisorGeorge) {
-      let [potStudents, inds] = Object.entries(
-        await instance.getSupsPotentialStudents({
-          from: supAddr,
-        })
-      );
-      const priorPotentialNumbStudents = potStudents.length;
+      let result = await instance.getSupsPotentialStudents({
+        from: supAddr,
+      });
 
-      let result = await instance.getSupsStudents({ from: supAddr });
+      let potStudents = result[0];
 
-      const priorNumbStudents = result.length;
+      const priorPotNumbStudents = potStudents.length;
+
+      result = await instance.getSupsStudents({ from: supAddr });
+
+      const priorNumbStudents = result[0].length;
 
       result = await instance.createPotentialStudent(supAddr, {
         from: studentAddr,
@@ -35,12 +36,11 @@ contract("EvieCoin", function (accounts) {
       result = await instance.getSupsPotentialStudents({
         from: supAddr,
       });
-      console.log(result)
       potStudents = result[0];
-      inds = result[1];
+      let inds = result[1];
       assert.equal(
         potStudents.length,
-        priorPotentialNumbStudents + 1,
+        priorPotNumbStudents + 1,
         "Adding a potential student should have increased the sup's pending students by 1"
       );
 
@@ -52,10 +52,10 @@ contract("EvieCoin", function (accounts) {
       );
       assert.equal(result.receipt.status, true);
       result = await instance.getSupsStudents({ from: supAddr });
-      assert.equal(result.length, priorNumbStudents + 1);
+      assert.equal(result[0].length, priorNumbStudents + 1);
       assert.equal(
         studentAddr.toString(),
-        result[priorNumbStudents].student.toString()
+        result[0][priorNumbStudents].toString()
       );
     }
     await createStudent(goodStudentBob);
