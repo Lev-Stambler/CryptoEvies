@@ -43,6 +43,15 @@ contract StudentAndSup is Ownable {
         _;
     }
 
+    modifier _is_not_student() {
+        for (uint i = 0; i < students.length; i++) {
+            if (students[i] == msg.sender) {
+                require(false, "Sender cannot be a student");
+            }   
+        }
+        _;
+    }
+
     constructor() {}
 
     /// @dev get whether the student is a pending potential student, initialized, or nothing at all 
@@ -61,6 +70,7 @@ contract StudentAndSup is Ownable {
     function createPotentialStudent(address supervisor)
         external
         _is_not_pending
+        _is_not_student
     {
         require(
             studentToSupervisor[msg.sender] == address(0),

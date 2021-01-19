@@ -3149,12 +3149,12 @@
         }
       },
       "links": {},
-      "address": "0x106AF8464D4baAaee6E6E7bda0D56d7847B51CEb",
-      "transactionHash": "0xa77788599547d0f521e9b051b8e2e5c7825e6c45f65e07acf96a5a034ddedfb1"
+      "address": "0x252c551Ca04dca12Ce9359de3eB05b4C5d346845",
+      "transactionHash": "0x85787e0275330ecba4f9e33cc244a656f44f695d0a7c660b7faf3eb97da4344b"
     }
   },
   "schemaVersion": "3.3.3",
-  "updatedAt": "2021-01-19T15:23:17.796Z",
+  "updatedAt": "2021-01-19T16:46:12.970Z",
   "networkType": "ethereum",
   "devdoc": {
     "details": "a coin which is rewarded to a student upon completition of clocking in and out within less than an hour A supervisor can then approve the coin",

@@ -1,5 +1,6 @@
 <script>
   import Approved from "./Approved.svelte";
+  import PendingStudent from './PendingStudent.svelte'
   import { APIStore } from "../../api/stores";
   import { onMount } from "svelte";
   import {
@@ -8,13 +9,13 @@
     loadInitClockOut,
     loadStudentType,
   } from "../../api/student";
+  import { StudentStatus } from "../../api/interfaces";
 
   let connected;
   let studentType;
   onMount(async () => {
     const { EvieCoin, address } = $APIStore;
     studentType = await loadStudentType(EvieCoin, address);
-    console.log(studentType)
     // const proms = [
     //   loadInitClockIn(EvieCoin, address),
     //   loadInitClockOut(EvieCoin, address),
@@ -26,12 +27,12 @@
 </script>
 
 {#if connected}
-  {#if studentType.FullStudent}
+  {#if studentType === StudentStatus.FullStudent}
     <Approved />
-  {:else if studentType.PendingStudent}
-    PendingStudent
   {:else}
-    None
+    <PendingStudent
+      studentAlreadyPending={studentType === StudentStatus.PendingStudent}
+    />
   {/if}
 {:else}
   Loading...

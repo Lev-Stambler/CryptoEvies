@@ -5,7 +5,7 @@
   import { initEvieCoin } from "./api/init";
   import { APIStore, StudentInfoStore } from "./api/stores";
   import SelectUserTypePage from "./Pages/SelectUserTypePage.svelte";
-  import SupervisorPage from "./Pages/SupervisorPage.svelte";
+  import SupervisorPage from "./Pages/Supervisor/SupervisorPage.svelte";
   import StudentPage from "./Pages/Student/StudentPage.svelte";
 
   let connected = false;

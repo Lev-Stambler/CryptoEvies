@@ -10,6 +10,9 @@ var app = (function () {
             tar[k] = src[k];
         return tar;
     }
+    function is_promise(value) {
+        return value && typeof value === 'object' && typeof value.then === 'function';
+    }
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -58,6 +61,12 @@ var app = (function () {
     function detach(node) {
         node.parentNode.removeChild(node);
     }
+    function destroy_each(iterations, detaching) {
+        for (let i = 0; i < iterations.length; i += 1) {
+            if (iterations[i])
+                iterations[i].d(detaching);
+        }
+    }
     function element(name) {
         return document.createElement(name);
     }
@@ -82,6 +91,9 @@ var app = (function () {
     }
     function children(element) {
         return Array.from(element.childNodes);
+    }
+    function set_input_value(input, value) {
+        input.value = value == null ? '' : value;
     }
     function custom_event(type, detail) {
         const e = document.createEvent('CustomEvent');
@@ -230,6 +242,77 @@ var app = (function () {
                 }
             });
             block.o(local);
+        }
+    }
+
+    function handle_promise(promise, info) {
+        const token = info.token = {};
+        function update(type, index, key, value) {
+            if (info.token !== token)
+                return;
+            info.resolved = value;
+            let child_ctx = info.ctx;
+            if (key !== undefined) {
+                child_ctx = child_ctx.slice();
+                child_ctx[key] = value;
+            }
+            const block = type && (info.current = type)(child_ctx);
+            let needs_flush = false;
+            if (info.block) {
+                if (info.blocks) {
+                    info.blocks.forEach((block, i) => {
+                        if (i !== index && block) {
+                            group_outros();
+                            transition_out(block, 1, 1, () => {
+                                if (info.blocks[i] === block) {
+                                    info.blocks[i] = null;
+                                }
+                            });
+                            check_outros();
+                        }
+                    });
+                }
+                else {
+                    info.block.d(1);
+                }
+                block.c();
+                transition_in(block, 1);
+                block.m(info.mount(), info.anchor);
+                needs_flush = true;
+            }
+            info.block = block;
+            if (info.blocks)
+                info.blocks[index] = block;
+            if (needs_flush) {
+                flush();
+            }
+        }
+        if (is_promise(promise)) {
+            const current_component = get_current_component();
+            promise.then(value => {
+                set_current_component(current_component);
+                update(info.then, 1, info.value, value);
+                set_current_component(null);
+            }, error => {
+                set_current_component(current_component);
+                update(info.catch, 2, info.error, error);
+                set_current_component(null);
+                if (!info.hasCatch) {
+                    throw error;
+                }
+            });
+            // if we previously had a then/catch block, destroy it
+            if (info.current !== info.pending) {
+                update(info.pending, 0);
+                return true;
+            }
+        }
+        else {
+            if (info.current !== info.then) {
+                update(info.then, 1, info.value, promise);
+                return true;
+            }
+            info.resolved = promise;
         }
     }
 
@@ -441,6 +524,15 @@ var app = (function () {
             return;
         dispatch_dev('SvelteDOMSetData', { node: text, data });
         text.data = data;
+    }
+    function validate_each_argument(arg) {
+        if (typeof arg !== 'string' && !(arg && typeof arg === 'object' && 'length' in arg)) {
+            let msg = '{#each} only iterates over array-like objects.';
+            if (typeof Symbol === 'function' && arg && Symbol.iterator in arg) {
+                msg += ' You can use a spread to convert this iterable into an array.';
+            }
+            throw new Error(msg);
+        }
     }
     function validate_slots(name, slot, keys) {
         for (const slot_key of Object.keys(slot)) {
@@ -4789,12 +4881,12 @@ var app = (function () {
     		},
     		links: {
     		},
-    		address: "0x106AF8464D4baAaee6E6E7bda0D56d7847B51CEb",
-    		transactionHash: "0xa77788599547d0f521e9b051b8e2e5c7825e6c45f65e07acf96a5a034ddedfb1"
+    		address: "0x252c551Ca04dca12Ce9359de3eB05b4C5d346845",
+    		transactionHash: "0x85787e0275330ecba4f9e33cc244a656f44f695d0a7c660b7faf3eb97da4344b"
     	}
     };
     var schemaVersion = "3.3.3";
-    var updatedAt = "2021-01-19T15:23:17.796Z";
+    var updatedAt = "2021-01-19T16:46:12.970Z";
     var networkType = "ethereum";
     var devdoc = {
     	details: "a coin which is rewarded to a student upon completition of clocking in and out within less than an hour A supervisor can then approve the coin",
@@ -5104,19 +5196,234 @@ var app = (function () {
     	}
     }
 
-    /* src/Pages/SupervisorPage.svelte generated by Svelte v3.31.2 */
+    /* src/Pages/Supervisor/SupervisorPage.svelte generated by Svelte v3.31.2 */
+
+    const { console: console_1$1 } = globals;
+    const file$1 = "src/Pages/Supervisor/SupervisorPage.svelte";
+
+    function get_each_context(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[4] = list[i];
+    	return child_ctx;
+    }
+
+    // (1:0) <script>   import { APIStore }
+    function create_catch_block(ctx) {
+    	const block = { c: noop, m: noop, p: noop, d: noop };
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block.name,
+    		type: "catch",
+    		source: "(1:0) <script>   import { APIStore }",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (22:0) {:then potStudents}
+    function create_then_block(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*potStudents*/ ctx[3].pendingAddrs;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*prom*/ 1) {
+    				each_value = /*potStudents*/ ctx[3].pendingAddrs;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block.name,
+    		type: "then",
+    		source: "(22:0) {:then potStudents}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (23:2) {#each potStudents.pendingAddrs as potStud}
+    function create_each_block(ctx) {
+    	let div;
+    	let p;
+    	let t0;
+    	let t1_value = /*potStud*/ ctx[4] + "";
+    	let t1;
+    	let t2;
+    	let form;
+    	let input;
+    	let t3;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			p = element("p");
+    			t0 = text("Pending student with address: ");
+    			t1 = text(t1_value);
+    			t2 = space();
+    			form = element("form");
+    			input = element("input");
+    			t3 = space();
+    			add_location(p, file$1, 24, 6, 595);
+    			attr_dev(input, "type", "submit");
+    			attr_dev(input, "name", "");
+    			input.value = "Approve Student";
+    			add_location(input, file$1, 26, 6, 669);
+    			attr_dev(form, "action", "");
+    			add_location(form, file$1, 25, 4, 646);
+    			attr_dev(div, "class", "pot-student svelte-cmmyth");
+    			add_location(div, file$1, 23, 4, 563);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, p);
+    			append_dev(p, t0);
+    			append_dev(p, t1);
+    			append_dev(div, t2);
+    			append_dev(div, form);
+    			append_dev(form, input);
+    			append_dev(div, t3);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block.name,
+    		type: "each",
+    		source: "(23:2) {#each potStudents.pendingAddrs as potStud}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (20:13)    Loading... {:then potStudents}
+    function create_pending_block(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block.name,
+    		type: "pending",
+    		source: "(20:13)    Loading... {:then potStudents}",
+    		ctx
+    	});
+
+    	return block;
+    }
 
     function create_fragment$2(ctx) {
+    	let await_block_anchor;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		hasCatch: false,
+    		pending: create_pending_block,
+    		then: create_then_block,
+    		catch: create_catch_block,
+    		value: 3
+    	};
+
+    	handle_promise(ctx[0], info);
+
     	const block = {
-    		c: noop,
+    		c: function create() {
+    			await_block_anchor = empty();
+    			info.block.c();
+    		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: noop,
-    		p: noop,
+    		m: function mount(target, anchor) {
+    			insert_dev(target, await_block_anchor, anchor);
+    			info.block.m(target, info.anchor = anchor);
+    			info.mount = () => await_block_anchor.parentNode;
+    			info.anchor = await_block_anchor;
+    		},
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
+
+    			{
+    				const child_ctx = ctx.slice();
+    				child_ctx[3] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
     		i: noop,
     		o: noop,
-    		d: noop
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(await_block_anchor);
+    			info.block.d(detaching);
+    			info.token = null;
+    			info = null;
+    		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
@@ -5130,16 +5437,38 @@ var app = (function () {
     	return block;
     }
 
-    function instance$2($$self, $$props) {
+    function instance$2($$self, $$props, $$invalidate) {
+    	let $APIStore;
+    	validate_store(APIStore, "APIStore");
+    	component_subscribe($$self, APIStore, $$value => $$invalidate(1, $APIStore = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("SupervisorPage", slots, []);
+
+    	async function getPendingStudents() {
+    		console.log($APIStore.address);
+    		const pending = await $APIStore.EvieCoin.methods.getSupsPotentialStudents().call({ from: $APIStore.address });
+
+    		return {
+    			pendingAddrs: pending[0],
+    			pendingIdxs: pending[1]
+    		};
+    	}
+
+    	const prom = getPendingStudents();
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<SupervisorPage> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<SupervisorPage> was created with unknown prop '${key}'`);
     	});
 
-    	return [];
+    	$$self.$capture_state = () => ({
+    		APIStore,
+    		getPendingStudents,
+    		prom,
+    		$APIStore
+    	});
+
+    	return [prom];
     }
 
     class SupervisorPage extends SvelteComponentDev {
@@ -5165,7 +5494,7 @@ var app = (function () {
     });
 
     /* src/Pages/Student/Approved.svelte generated by Svelte v3.31.2 */
-    const file$1 = "src/Pages/Student/Approved.svelte";
+    const file$2 = "src/Pages/Student/Approved.svelte";
 
     function create_fragment$3(ctx) {
     	let div1;
@@ -5215,22 +5544,22 @@ var app = (function () {
     			div4 = element("div");
     			button1 = element("button");
     			button1.textContent = "Clock out";
-    			add_location(p0, file$1, 21, 4, 568);
+    			add_location(p0, file$2, 21, 4, 568);
     			attr_dev(div0, "class", "col-8");
-    			add_location(div0, file$1, 20, 2, 544);
+    			add_location(div0, file$2, 20, 2, 544);
     			attr_dev(div1, "class", "row");
-    			add_location(div1, file$1, 19, 0, 524);
-    			add_location(p1, file$1, 26, 4, 703);
+    			add_location(div1, file$2, 19, 0, 524);
+    			add_location(p1, file$2, 26, 4, 703);
     			attr_dev(div2, "class", "col-4");
-    			add_location(div2, file$1, 25, 2, 679);
-    			add_location(button0, file$1, 33, 21, 993);
+    			add_location(div2, file$2, 25, 2, 679);
+    			add_location(button0, file$2, 33, 21, 993);
     			attr_dev(div3, "class", "col-4");
-    			add_location(div3, file$1, 33, 2, 974);
-    			add_location(button1, file$1, 34, 21, 1065);
+    			add_location(div3, file$2, 33, 2, 974);
+    			add_location(button1, file$2, 34, 21, 1065);
     			attr_dev(div4, "class", "col-4");
-    			add_location(div4, file$1, 34, 2, 1046);
+    			add_location(div4, file$2, 34, 2, 1046);
     			attr_dev(div5, "class", "row");
-    			add_location(div5, file$1, 24, 0, 659);
+    			add_location(div5, file$2, 24, 0, 659);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5345,6 +5674,269 @@ var app = (function () {
     	}
     }
 
+    /* src/Pages/Student/PendingStudent.svelte generated by Svelte v3.31.2 */
+
+    const { console: console_1$2 } = globals;
+    const file$3 = "src/Pages/Student/PendingStudent.svelte";
+
+    // (22:2) {:else}
+    function create_else_block$1(ctx) {
+    	let h2;
+    	let t1;
+    	let form;
+    	let input0;
+    	let t2;
+    	let input1;
+    	let mounted;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			h2 = element("h2");
+    			h2.textContent = "Request a supervisor";
+    			t1 = space();
+    			form = element("form");
+    			input0 = element("input");
+    			t2 = space();
+    			input1 = element("input");
+    			add_location(h2, file$3, 22, 4, 616);
+    			attr_dev(input0, "type", "text");
+    			attr_dev(input0, "placeholder", "Supervisor Address");
+    			input0.required = true;
+    			add_location(input0, file$3, 24, 6, 710);
+    			attr_dev(input1, "type", "submit");
+    			input1.value = "submit";
+    			add_location(input1, file$3, 30, 6, 842);
+    			attr_dev(form, "action", "");
+    			add_location(form, file$3, 23, 4, 650);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, h2, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, form, anchor);
+    			append_dev(form, input0);
+    			set_input_value(input0, /*supervisor*/ ctx[1]);
+    			append_dev(form, t2);
+    			append_dev(form, input1);
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[3]),
+    					listen_dev(form, "submit", /*submit_handler*/ ctx[4], false, false, false)
+    				];
+
+    				mounted = true;
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*supervisor*/ 2 && input0.value !== /*supervisor*/ ctx[1]) {
+    				set_input_value(input0, /*supervisor*/ ctx[1]);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h2);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(form);
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$1.name,
+    		type: "else",
+    		source: "(22:2) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (17:2) {#if studentAlreadyPending}
+    function create_if_block$1(ctx) {
+    	let h2;
+    	let t1;
+    	let form;
+    	let input;
+
+    	const block = {
+    		c: function create() {
+    			h2 = element("h2");
+    			h2.textContent = "Your supervisor is reviewing your request";
+    			t1 = space();
+    			form = element("form");
+    			input = element("input");
+    			add_location(h2, file$3, 17, 4, 443);
+    			attr_dev(input, "type", "submit");
+    			input.disabled = true;
+    			input.value = "Change requested supervisor";
+    			add_location(input, file$3, 19, 6, 521);
+    			attr_dev(form, "action", "");
+    			add_location(form, file$3, 18, 4, 498);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, h2, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, form, anchor);
+    			append_dev(form, input);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h2);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(form);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$1.name,
+    		type: "if",
+    		source: "(17:2) {#if studentAlreadyPending}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$4(ctx) {
+    	let div;
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*studentAlreadyPending*/ ctx[0]) return create_if_block$1;
+    		return create_else_block$1;
+    	}
+
+    	let current_block_type = select_block_type(ctx);
+    	let if_block = current_block_type(ctx);
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			if_block.c();
+    			add_location(div, file$3, 15, 0, 403);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			if_block.m(div, null);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
+    				if_block.p(ctx, dirty);
+    			} else {
+    				if_block.d(1);
+    				if_block = current_block_type(ctx);
+
+    				if (if_block) {
+    					if_block.c();
+    					if_block.m(div, null);
+    				}
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			if_block.d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$4.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$4($$self, $$props, $$invalidate) {
+    	let $APIStore;
+    	validate_store(APIStore, "APIStore");
+    	component_subscribe($$self, APIStore, $$value => $$invalidate(5, $APIStore = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("PendingStudent", slots, []);
+    	let { studentAlreadyPending = false } = $$props;
+    	let supervisor;
+
+    	async function createPotStudent() {
+    		console.log("a");
+    		await $APIStore.EvieCoin.methods.createPotentialStudent(supervisor).send({ from: $APIStore.address });
+    	} // will change the type of student
+    	// window.location.reload()
+
+    	const writable_props = ["studentAlreadyPending"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<PendingStudent> was created with unknown prop '${key}'`);
+    	});
+
+    	function input0_input_handler() {
+    		supervisor = this.value;
+    		$$invalidate(1, supervisor);
+    	}
+
+    	const submit_handler = () => createPotStudent();
+
+    	$$self.$$set = $$props => {
+    		if ("studentAlreadyPending" in $$props) $$invalidate(0, studentAlreadyPending = $$props.studentAlreadyPending);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		APIStore,
+    		StudentInfoStore,
+    		studentAlreadyPending,
+    		supervisor,
+    		createPotStudent,
+    		$APIStore
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("studentAlreadyPending" in $$props) $$invalidate(0, studentAlreadyPending = $$props.studentAlreadyPending);
+    		if ("supervisor" in $$props) $$invalidate(1, supervisor = $$props.supervisor);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [
+    		studentAlreadyPending,
+    		supervisor,
+    		createPotStudent,
+    		input0_input_handler,
+    		submit_handler
+    	];
+    }
+
+    class PendingStudent extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, { studentAlreadyPending: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "PendingStudent",
+    			options,
+    			id: create_fragment$4.name
+    		});
+    	}
+
+    	get studentAlreadyPending() {
+    		throw new Error("<PendingStudent>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set studentAlreadyPending(value) {
+    		throw new Error("<PendingStudent>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
     async function loadStudentType(evieCoin, address) {
         const status = await evieCoin.methods.studentStatus(address).call();
         return parseInt(status);
@@ -5390,11 +5982,16 @@ var app = (function () {
         }
     }
 
+    var StudentStatus;
+    (function (StudentStatus) {
+        StudentStatus[StudentStatus["FullStudent"] = 0] = "FullStudent";
+        StudentStatus[StudentStatus["PendingStudent"] = 1] = "PendingStudent";
+        StudentStatus[StudentStatus["None"] = 2] = "None";
+    })(StudentStatus || (StudentStatus = {}));
+
     /* src/Pages/Student/StudentPage.svelte generated by Svelte v3.31.2 */
 
-    const { console: console_1$1 } = globals;
-
-    // (36:0) {:else}
+    // (37:0) {:else}
     function create_else_block_1(ctx) {
     	let t;
 
@@ -5417,26 +6014,25 @@ var app = (function () {
     		block,
     		id: create_else_block_1.name,
     		type: "else",
-    		source: "(36:0) {:else}",
+    		source: "(37:0) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (28:0) {#if connected}
-    function create_if_block$1(ctx) {
+    // (29:0) {#if connected}
+    function create_if_block$2(ctx) {
     	let current_block_type_index;
     	let if_block;
     	let if_block_anchor;
     	let current;
-    	const if_block_creators = [create_if_block_1, create_if_block_2, create_else_block$1];
+    	const if_block_creators = [create_if_block_1, create_else_block$2];
     	const if_blocks = [];
 
     	function select_block_type_1(ctx, dirty) {
-    		if (/*studentType*/ ctx[1].FullStudent) return 0;
-    		if (/*studentType*/ ctx[1].PendingStudent) return 1;
-    		return 2;
+    		if (/*studentType*/ ctx[1] === StudentStatus.FullStudent) return 0;
+    		return 1;
     	}
 
     	current_block_type_index = select_block_type_1(ctx);
@@ -5456,7 +6052,9 @@ var app = (function () {
     			let previous_block_index = current_block_type_index;
     			current_block_type_index = select_block_type_1(ctx);
 
-    			if (current_block_type_index !== previous_block_index) {
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
     				group_outros();
 
     				transition_out(if_blocks[previous_block_index], 1, 1, () => {
@@ -5469,6 +6067,8 @@ var app = (function () {
     				if (!if_block) {
     					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
     					if_block.c();
+    				} else {
+    					if_block.p(ctx, dirty);
     				}
 
     				transition_in(if_block, 1);
@@ -5492,74 +6092,66 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$1.name,
+    		id: create_if_block$2.name,
     		type: "if",
-    		source: "(28:0) {#if connected}",
+    		source: "(29:0) {#if connected}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (33:2) {:else}
-    function create_else_block$1(ctx) {
-    	let t;
+    // (32:2) {:else}
+    function create_else_block$2(ctx) {
+    	let pendingstudent;
+    	let current;
+
+    	pendingstudent = new PendingStudent({
+    			props: {
+    				studentAlreadyPending: /*studentType*/ ctx[1] === StudentStatus.PendingStudent
+    			},
+    			$$inline: true
+    		});
 
     	const block = {
     		c: function create() {
-    			t = text("None");
+    			create_component(pendingstudent.$$.fragment);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
+    			mount_component(pendingstudent, target, anchor);
+    			current = true;
     		},
-    		i: noop,
-    		o: noop,
+    		p: function update(ctx, dirty) {
+    			const pendingstudent_changes = {};
+    			if (dirty & /*studentType*/ 2) pendingstudent_changes.studentAlreadyPending = /*studentType*/ ctx[1] === StudentStatus.PendingStudent;
+    			pendingstudent.$set(pendingstudent_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(pendingstudent.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(pendingstudent.$$.fragment, local);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
+    			destroy_component(pendingstudent, detaching);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$1.name,
+    		id: create_else_block$2.name,
     		type: "else",
-    		source: "(33:2) {:else}",
+    		source: "(32:2) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (31:39) 
-    function create_if_block_2(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("PendingStudent");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_2.name,
-    		type: "if",
-    		source: "(31:39) ",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (29:2) {#if studentType.FullStudent}
+    // (30:2) {#if studentType === StudentStatus.FullStudent}
     function create_if_block_1(ctx) {
     	let approved;
     	let current;
@@ -5573,6 +6165,7 @@ var app = (function () {
     			mount_component(approved, target, anchor);
     			current = true;
     		},
+    		p: noop,
     		i: function intro(local) {
     			if (current) return;
     			transition_in(approved.$$.fragment, local);
@@ -5591,19 +6184,19 @@ var app = (function () {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(29:2) {#if studentType.FullStudent}",
+    		source: "(30:2) {#if studentType === StudentStatus.FullStudent}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$4(ctx) {
+    function create_fragment$5(ctx) {
     	let current_block_type_index;
     	let if_block;
     	let if_block_anchor;
     	let current;
-    	const if_block_creators = [create_if_block$1, create_else_block_1];
+    	const if_block_creators = [create_if_block$2, create_else_block_1];
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
@@ -5671,7 +6264,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$5.name,
     		type: "component",
     		source: "",
     		ctx
@@ -5680,7 +6273,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$5($$self, $$props, $$invalidate) {
     	let $APIStore;
     	validate_store(APIStore, "APIStore");
     	component_subscribe($$self, APIStore, $$value => $$invalidate(2, $APIStore = $$value));
@@ -5692,7 +6285,6 @@ var app = (function () {
     	onMount(async () => {
     		const { EvieCoin, address } = $APIStore;
     		$$invalidate(1, studentType = await loadStudentType(EvieCoin, address));
-    		console.log(studentType);
 
     		// const proms = [
     		//   loadInitClockIn(EvieCoin, address),
@@ -5706,17 +6298,19 @@ var app = (function () {
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<StudentPage> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<StudentPage> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$capture_state = () => ({
     		Approved,
+    		PendingStudent,
     		APIStore,
     		onMount,
     		loadBal,
     		loadInitClockIn,
     		loadInitClockOut,
     		loadStudentType,
+    		StudentStatus,
     		connected,
     		studentType,
     		$APIStore
@@ -5737,22 +6331,22 @@ var app = (function () {
     class StudentPage extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
+    		init(this, options, instance$5, create_fragment$5, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "StudentPage",
     			options,
-    			id: create_fragment$4.name
+    			id: create_fragment$5.name
     		});
     	}
     }
 
     /* src/App.svelte generated by Svelte v3.31.2 */
-    const file$2 = "src/App.svelte";
+    const file$4 = "src/App.svelte";
 
     // (37:2) {:else}
-    function create_else_block$2(ctx) {
+    function create_else_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -5772,7 +6366,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$2.name,
+    		id: create_else_block$3.name,
     		type: "else",
     		source: "(37:2) {:else}",
     		ctx
@@ -5782,7 +6376,7 @@ var app = (function () {
     }
 
     // (35:2) {#if connected}
-    function create_if_block$2(ctx) {
+    function create_if_block$3(ctx) {
     	let router;
     	let current;
 
@@ -5816,7 +6410,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$2.name,
+    		id: create_if_block$3.name,
     		type: "if",
     		source: "(35:2) {#if connected}",
     		ctx
@@ -5825,12 +6419,12 @@ var app = (function () {
     	return block;
     }
 
-    function create_fragment$5(ctx) {
+    function create_fragment$6(ctx) {
     	let div;
     	let current_block_type_index;
     	let if_block;
     	let current;
-    	const if_block_creators = [create_if_block$2, create_else_block$2];
+    	const if_block_creators = [create_if_block$3, create_else_block$3];
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
@@ -5846,7 +6440,7 @@ var app = (function () {
     			div = element("div");
     			if_block.c();
     			attr_dev(div, "class", "container");
-    			add_location(div, file$2, 33, 0, 1458);
+    			add_location(div, file$4, 33, 0, 1469);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5900,7 +6494,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$5.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -5909,7 +6503,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$5($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("App", slots, []);
 
@@ -6005,13 +6599,13 @@ var app = (function () {
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$5, create_fragment$5, safe_not_equal, {});
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$5.name
+    			id: create_fragment$6.name
     		});
     	}
     }
