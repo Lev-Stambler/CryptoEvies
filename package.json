@@ -5,7 +5,8 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "start": "sirv public",
-    "validate": "svelte-check"
+    "validate": "svelte-check",
+    "typechain": "typechain --target ethers-v5 \"build/**/*.json\" --outDir src/types"
   },
   "devDependencies": {
     "@openzeppelin/test-helpers": "^0.5.10",
@@ -14,6 +15,7 @@
     "@rollup/plugin-node-resolve": "^10.0.0",
     "@rollup/plugin-typescript": "^6.0.0",
     "@tsconfig/svelte": "^1.0.0",
+    "@typechain/ethers-v5": "^5.0.0",
     "rollup": "^2.3.4",
     "rollup-plugin-css-only": "^3.1.0",
     "rollup-plugin-livereload": "^2.0.0",
@@ -24,6 +26,7 @@
     "svelte-preprocess": "^4.0.0",
     "truffle": "^5.1.61",
     "tslib": "^2.0.0",
+    "typechain": "^4.0.1",
     "typescript": "^3.9.3"
   },
   "dependencies": {

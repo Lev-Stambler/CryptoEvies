@@ -6,7 +6,7 @@
   import { APIStore, StudentInfoStore } from "./api/stores";
   import SelectUserTypePage from "./Pages/SelectUserTypePage.svelte";
   import SupervisorPage from "./Pages/SupervisorPage.svelte";
-  import StudentPage from "./Pages/StudentPage.svelte";
+  import StudentPage from "./Pages/Student/StudentPage.svelte";
 
   let connected = false;
   let web3
