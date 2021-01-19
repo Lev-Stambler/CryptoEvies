@@ -5203,7 +5203,8 @@ var app = (function () {
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[4] = list[i];
+    	child_ctx[6] = list[i];
+    	child_ctx[8] = i;
     	return child_ctx;
     }
 
@@ -5222,10 +5223,15 @@ var app = (function () {
     	return block;
     }
 
-    // (22:0) {:then potStudents}
+    // (23:0) {:then potStudents}
     function create_then_block(ctx) {
-    	let each_1_anchor;
-    	let each_value = /*potStudents*/ ctx[3].pendingAddrs;
+    	let div0;
+    	let h20;
+    	let t1;
+    	let t2;
+    	let div1;
+    	let h21;
+    	let each_value = /*potStudents*/ ctx[5].pendingAddrs;
     	validate_each_argument(each_value);
     	let each_blocks = [];
 
@@ -5235,22 +5241,40 @@ var app = (function () {
 
     	const block = {
     		c: function create() {
+    			div0 = element("div");
+    			h20 = element("h2");
+    			h20.textContent = "Potential Students";
+    			t1 = space();
+
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			each_1_anchor = empty();
+    			t2 = space();
+    			div1 = element("div");
+    			h21 = element("h2");
+    			h21.textContent = "Current Students";
+    			add_location(h20, file$1, 24, 4, 648);
+    			add_location(div0, file$1, 23, 2, 638);
+    			add_location(h21, file$1, 35, 4, 1018);
+    			add_location(div1, file$1, 34, 2, 1008);
     		},
     		m: function mount(target, anchor) {
+    			insert_dev(target, div0, anchor);
+    			append_dev(div0, h20);
+    			append_dev(div0, t1);
+
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
+    				each_blocks[i].m(div0, null);
     			}
 
-    			insert_dev(target, each_1_anchor, anchor);
+    			insert_dev(target, t2, anchor);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, h21);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*prom*/ 1) {
-    				each_value = /*potStudents*/ ctx[3].pendingAddrs;
+    			if (dirty & /*approveStudent, prom*/ 3) {
+    				each_value = /*potStudents*/ ctx[5].pendingAddrs;
     				validate_each_argument(each_value);
     				let i;
 
@@ -5262,7 +5286,7 @@ var app = (function () {
     					} else {
     						each_blocks[i] = create_each_block(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    						each_blocks[i].m(div0, null);
     					}
     				}
 
@@ -5274,8 +5298,10 @@ var app = (function () {
     			}
     		},
     		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div0);
     			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
+    			if (detaching) detach_dev(t2);
+    			if (detaching) detach_dev(div1);
     		}
     	};
 
@@ -5283,24 +5309,30 @@ var app = (function () {
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(22:0) {:then potStudents}",
+    		source: "(23:0) {:then potStudents}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (23:2) {#each potStudents.pendingAddrs as potStud}
+    // (26:4) {#each potStudents.pendingAddrs as potStud, i}
     function create_each_block(ctx) {
     	let div;
     	let p;
     	let t0;
-    	let t1_value = /*potStud*/ ctx[4] + "";
+    	let t1_value = /*potStud*/ ctx[6] + "";
     	let t1;
     	let t2;
     	let form;
     	let input;
     	let t3;
+    	let mounted;
+    	let dispose;
+
+    	function submit_handler() {
+    		return /*submit_handler*/ ctx[2](/*potStudents*/ ctx[5], /*i*/ ctx[8]);
+    	}
 
     	const block = {
     		c: function create() {
@@ -5312,15 +5344,14 @@ var app = (function () {
     			form = element("form");
     			input = element("input");
     			t3 = space();
-    			add_location(p, file$1, 24, 6, 595);
+    			add_location(p, file$1, 27, 8, 767);
     			attr_dev(input, "type", "submit");
     			attr_dev(input, "name", "");
     			input.value = "Approve Student";
-    			add_location(input, file$1, 26, 6, 669);
-    			attr_dev(form, "action", "");
-    			add_location(form, file$1, 25, 4, 646);
+    			add_location(input, file$1, 29, 10, 900);
+    			add_location(form, file$1, 28, 8, 822);
     			attr_dev(div, "class", "pot-student svelte-cmmyth");
-    			add_location(div, file$1, 23, 4, 563);
+    			add_location(div, file$1, 26, 6, 733);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -5331,10 +5362,19 @@ var app = (function () {
     			append_dev(div, form);
     			append_dev(form, input);
     			append_dev(div, t3);
+
+    			if (!mounted) {
+    				dispose = listen_dev(form, "submit", submit_handler, false, false, false);
+    				mounted = true;
+    			}
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div);
+    			mounted = false;
+    			dispose();
     		}
     	};
 
@@ -5342,14 +5382,14 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(23:2) {#each potStudents.pendingAddrs as potStud}",
+    		source: "(26:4) {#each potStudents.pendingAddrs as potStud, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (20:13)    Loading... {:then potStudents}
+    // (21:13)    Loading... {:then potStudents}
     function create_pending_block(ctx) {
     	let t;
 
@@ -5370,7 +5410,7 @@ var app = (function () {
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(20:13)    Loading... {:then potStudents}",
+    		source: "(21:13)    Loading... {:then potStudents}",
     		ctx
     	});
 
@@ -5388,7 +5428,7 @@ var app = (function () {
     		pending: create_pending_block,
     		then: create_then_block,
     		catch: create_catch_block,
-    		value: 3
+    		value: 5
     	};
 
     	handle_promise(ctx[0], info);
@@ -5412,7 +5452,7 @@ var app = (function () {
 
     			{
     				const child_ctx = ctx.slice();
-    				child_ctx[3] = info.resolved;
+    				child_ctx[5] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
@@ -5440,7 +5480,7 @@ var app = (function () {
     function instance$2($$self, $$props, $$invalidate) {
     	let $APIStore;
     	validate_store(APIStore, "APIStore");
-    	component_subscribe($$self, APIStore, $$value => $$invalidate(1, $APIStore = $$value));
+    	component_subscribe($$self, APIStore, $$value => $$invalidate(3, $APIStore = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("SupervisorPage", slots, []);
 
@@ -5455,20 +5495,28 @@ var app = (function () {
     	}
 
     	const prom = getPendingStudents();
+
+    	async function approveStudent(potStudIdx) {
+    		await $APIStore.EvieCoin.methods.potentialSupApproveStudent(potStudIdx).send({ from: $APIStore.address });
+    	}
+
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<SupervisorPage> was created with unknown prop '${key}'`);
     	});
 
+    	const submit_handler = (potStudents, i) => approveStudent(potStudents.pendingIdxs[i]);
+
     	$$self.$capture_state = () => ({
     		APIStore,
     		getPendingStudents,
     		prom,
+    		approveStudent,
     		$APIStore
     	});
 
-    	return [prom];
+    	return [prom, approveStudent, submit_handler];
     }
 
     class SupervisorPage extends SvelteComponentDev {
@@ -5679,7 +5727,7 @@ var app = (function () {
     const { console: console_1$2 } = globals;
     const file$3 = "src/Pages/Student/PendingStudent.svelte";
 
-    // (22:2) {:else}
+    // (21:2) {:else}
     function create_else_block$1(ctx) {
     	let h2;
     	let t1;
@@ -5699,16 +5747,16 @@ var app = (function () {
     			input0 = element("input");
     			t2 = space();
     			input1 = element("input");
-    			add_location(h2, file$3, 22, 4, 616);
+    			add_location(h2, file$3, 21, 4, 604);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Supervisor Address");
     			input0.required = true;
-    			add_location(input0, file$3, 24, 6, 710);
+    			add_location(input0, file$3, 23, 6, 698);
     			attr_dev(input1, "type", "submit");
     			input1.value = "submit";
-    			add_location(input1, file$3, 30, 6, 842);
+    			add_location(input1, file$3, 29, 6, 830);
     			attr_dev(form, "action", "");
-    			add_location(form, file$3, 23, 4, 650);
+    			add_location(form, file$3, 22, 4, 638);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h2, anchor);
@@ -5746,14 +5794,14 @@ var app = (function () {
     		block,
     		id: create_else_block$1.name,
     		type: "else",
-    		source: "(22:2) {:else}",
+    		source: "(21:2) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (17:2) {#if studentAlreadyPending}
+    // (16:2) {#if studentAlreadyPending}
     function create_if_block$1(ctx) {
     	let h2;
     	let t1;
@@ -5767,13 +5815,13 @@ var app = (function () {
     			t1 = space();
     			form = element("form");
     			input = element("input");
-    			add_location(h2, file$3, 17, 4, 443);
+    			add_location(h2, file$3, 16, 4, 431);
     			attr_dev(input, "type", "submit");
     			input.disabled = true;
     			input.value = "Change requested supervisor";
-    			add_location(input, file$3, 19, 6, 521);
+    			add_location(input, file$3, 18, 6, 509);
     			attr_dev(form, "action", "");
-    			add_location(form, file$3, 18, 4, 498);
+    			add_location(form, file$3, 17, 4, 486);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h2, anchor);
@@ -5793,7 +5841,7 @@ var app = (function () {
     		block,
     		id: create_if_block$1.name,
     		type: "if",
-    		source: "(17:2) {#if studentAlreadyPending}",
+    		source: "(16:2) {#if studentAlreadyPending}",
     		ctx
     	});
 
@@ -5815,7 +5863,7 @@ var app = (function () {
     		c: function create() {
     			div = element("div");
     			if_block.c();
-    			add_location(div, file$3, 15, 0, 403);
+    			add_location(div, file$3, 14, 0, 391);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5868,8 +5916,7 @@ var app = (function () {
     	async function createPotStudent() {
     		console.log("a");
     		await $APIStore.EvieCoin.methods.createPotentialStudent(supervisor).send({ from: $APIStore.address });
-    	} // will change the type of student
-    	// window.location.reload()
+    	} // TODO: add pending shtuff to events and student info
 
     	const writable_props = ["studentAlreadyPending"];
 
