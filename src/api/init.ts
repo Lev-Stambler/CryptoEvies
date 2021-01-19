@@ -8,28 +8,33 @@ import {
 } from "./event-listeners";
 import { APIStore } from "./stores";
 
-export async function initEvieCoin() {
-  const { EvieCoin, address } = await loadBlockchainData();
+export async function initEvieCoin(web3) {
+  const { EvieCoin, address } = await loadBlockchainData(web3);
   await setEventListeners(EvieCoin, address);
 }
 
-async function loadBlockchainData() {
+async function loadBlockchainData(web3) {
   const accounts = (await window.ethereum.send("eth_requestAccounts")).result;
   const address = accounts[0];
-
-  const evieCoin: EvieCoin = (new window.web3.eth.Contract(
-    EvieCoinContract.abi,
-    address
-  ) as any) as EvieCoin;
-
-  APIStore.set({
-    EvieCoin: evieCoin,
-    address,
-  });
-  return {
-    EvieCoin: evieCoin,
-    address,
-  };
+  const networkId = await window.web3.eth.net.getId();
+  const evieCoinData = EvieCoinContract.networks[networkId];
+  if (evieCoinData) {
+    const evieCoin: EvieCoin = (new web3.eth.Contract(
+      EvieCoinContract.abi,
+      evieCoinData.address
+    ) as any) as EvieCoin;
+    APIStore.set({
+      EvieCoin: evieCoin,
+      address,
+    });
+    return {
+      EvieCoin: evieCoin,
+      address,
+    };
+  } else {
+    alert("Please use a web3.js enabled browser and make sure that EvieCoin is loaded")
+    throw "Please use a web3.js enabled browser and make sure that EvieCoin is loaded"
+  }
 }
 
 async function setEventListeners(evieCoin: EvieCoin, address) {

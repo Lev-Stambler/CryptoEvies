@@ -43,7 +43,7 @@ contract("EvieCoin", function (accounts) {
       const priorNumbStudents = result[0].length;
 
       // Ensure that the student is None type
-      result = await instance.studentStatus({ from: studentAddr });
+      result = await instance.studentStatus(studentAddr);
       assert.equal(result.toString(), StudentType.None);
 
       result = await instance.createPotentialStudent(supAddr, {
@@ -52,7 +52,7 @@ contract("EvieCoin", function (accounts) {
       assert.equal(result.receipt.status, true);
 
       // Ensure that the student is Potential type
-      result = await instance.studentStatus({ from: studentAddr });
+      result = await instance.studentStatus(studentAddr);
       assert.equal(result.toString(), StudentType.PendingStudent);
 
       result = await instance.getSupsPotentialStudents({
@@ -89,7 +89,7 @@ contract("EvieCoin", function (accounts) {
       assert.equal(potStudents.length, priorPotNumbStudents);
 
       // Ensure that the student is Full type
-      result = await instance.studentStatus({ from: studentAddr });
+      result = await instance.studentStatus(studentAddr);
       assert.equal(result.toString(), StudentType.FullStudent);
     }
 

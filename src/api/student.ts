@@ -7,7 +7,7 @@ export async function loadStudentType(
   evieCoin: EvieCoin,
   address
 ): Promise<StudentStatus> {
-  const status = await evieCoin.methods.studentStatus().call();
+  const status = await evieCoin.methods.studentStatus(address).call();
   return parseInt(status) as StudentStatus;
 }
 

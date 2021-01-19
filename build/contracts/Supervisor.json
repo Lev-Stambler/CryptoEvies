@@ -5,23 +5,23 @@
   "bytecode": "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220635d3a7a9e95224cf5b2f1df53389d88ae689b64b618f2a8a24111ea557d5b7164736f6c63430007000033",
   "deployedBytecode": "0x6080604052600080fdfea2646970667358221220635d3a7a9e95224cf5b2f1df53389d88ae689b64b618f2a8a24111ea557d5b7164736f6c63430007000033",
   "immutableReferences": {},
-  "sourceMap": "25:24:3:-:0;;;;;;;;;;;;;;;;;;;",
-  "deployedSourceMap": "25:24:3:-:0;;;;;",
+  "sourceMap": "25:24:4:-:0;;;;;;;;;;;;;;;;;;;",
+  "deployedSourceMap": "25:24:4:-:0;;;;;",
   "source": "pragma solidity ^0.7.0;\n\ncontract Supervisor {\n\n}",
   "sourcePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
   "ast": {
     "absolutePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
     "exportedSymbols": {
       "Supervisor": [
-        389
+        816
       ]
     },
-    "id": 390,
+    "id": 817,
     "license": null,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 388,
+        "id": 815,
         "literals": [
           "solidity",
           "^",
@@ -29,7 +29,7 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "0:23:3"
+        "src": "0:23:4"
       },
       {
         "abstract": false,
@@ -38,25 +38,25 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 389,
+        "id": 816,
         "linearizedBaseContracts": [
-          389
+          816
         ],
         "name": "Supervisor",
         "nodeType": "ContractDefinition",
         "nodes": [],
-        "scope": 390,
-        "src": "25:24:3"
+        "scope": 817,
+        "src": "25:24:4"
       }
     ],
-    "src": "0:49:3"
+    "src": "0:49:4"
   },
   "legacyAST": {
     "attributes": {
       "absolutePath": "/home/lev/code/blockchain/eth/evie-timer/contracts/Supervisor.sol",
       "exportedSymbols": {
         "Supervisor": [
-          389
+          816
         ]
       },
       "license": null
@@ -71,9 +71,9 @@
             ".0"
           ]
         },
-        "id": 388,
+        "id": 815,
         "name": "PragmaDirective",
-        "src": "0:23:3"
+        "src": "0:23:4"
       },
       {
         "attributes": {
@@ -88,22 +88,22 @@
           "documentation": null,
           "fullyImplemented": true,
           "linearizedBaseContracts": [
-            389
+            816
           ],
           "name": "Supervisor",
           "nodes": [
             null
           ],
-          "scope": 390
+          "scope": 817
         },
-        "id": 389,
+        "id": 816,
         "name": "ContractDefinition",
-        "src": "25:24:3"
+        "src": "25:24:4"
       }
     ],
-    "id": 390,
+    "id": 817,
     "name": "SourceUnit",
-    "src": "0:49:3"
+    "src": "0:49:4"
   },
   "compiler": {
     "name": "solc",
@@ -111,7 +111,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.3",
-  "updatedAt": "2021-01-17T23:48:38.907Z",
+  "updatedAt": "2021-01-19T15:23:09.299Z",
   "devdoc": {
     "kind": "dev",
     "methods": {},

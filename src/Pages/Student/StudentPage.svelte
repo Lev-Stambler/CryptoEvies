@@ -13,7 +13,6 @@
   let studentType;
   onMount(async () => {
     const { EvieCoin, address } = $APIStore;
-    console.log($APIStore);
     studentType = await loadStudentType(EvieCoin, address);
     console.log(studentType)
     // const proms = [

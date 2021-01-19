@@ -46,10 +46,10 @@ contract StudentAndSup is Ownable {
     constructor() {}
 
     /// @dev get whether the student is a pending potential student, initialized, or nothing at all 
-    function studentStatus() view public returns(StudentType) {
-        if (studentToSupervisor[msg.sender] != address(0)) {
+    function studentStatus(address student) view public returns(StudentType) {
+        if (studentToSupervisor[student] != address(0)) {
             return StudentType.FullStudent;
-        } else if (pendingStudentToApprovedSup[msg.sender] != address(0)) {
+        } else if (pendingStudentToApprovedSup[student] != address(0)) {
             return StudentType.PendingStudent;
         } else {
             return StudentType.None;

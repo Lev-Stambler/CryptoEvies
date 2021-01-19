@@ -14,7 +14,7 @@
   onMount(async () => {
     if (!connected) {
       const instance = await loadWeb3();
-      await initEvieCoin()
+      await initEvieCoin(instance)
     }
     connected = true;
   });
