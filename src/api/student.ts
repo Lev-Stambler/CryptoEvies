@@ -1,5 +1,15 @@
 import { ethTimestampToDate } from "../env/time";
+import type { EvieCoin } from "../types";
+import type { StudentStatus } from "./interfaces";
 import { StudentInfoStore } from "./stores";
+
+export async function loadStudentType(
+  evieCoin: EvieCoin,
+  address
+): Promise<StudentStatus> {
+  const status = await evieCoin.methods.studentStatus().call();
+  return parseInt(status) as StudentStatus;
+}
 
 export async function loadInitClockIn(evieCoin, address) {
   try {

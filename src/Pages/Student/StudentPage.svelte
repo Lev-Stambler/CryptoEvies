@@ -6,24 +6,34 @@
     loadBal,
     loadInitClockIn,
     loadInitClockOut,
+    loadStudentType,
   } from "../../api/student";
 
   let connected;
+  let studentType;
   onMount(async () => {
     const { EvieCoin, address } = $APIStore;
     console.log($APIStore);
-    const proms = [
-      loadInitClockIn(EvieCoin, address),
-      loadInitClockOut(EvieCoin, address),
-      loadBal(EvieCoin, address),
-    ];
-    await Promise.all(proms);
+    studentType = await loadStudentType(EvieCoin, address);
+    console.log(studentType)
+    // const proms = [
+    //   loadInitClockIn(EvieCoin, address),
+    //   loadInitClockOut(EvieCoin, address),
+    //   loadBal(EvieCoin, address),
+    // ];
+    // await Promise.all(proms);
     connected = true;
   });
 </script>
 
 {#if connected}
-  <Approved />
+  {#if studentType.FullStudent}
+    <Approved />
+  {:else if studentType.PendingStudent}
+    PendingStudent
+  {:else}
+    None
+  {/if}
 {:else}
   Loading...
 {/if}

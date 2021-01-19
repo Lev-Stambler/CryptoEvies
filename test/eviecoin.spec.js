@@ -1,9 +1,22 @@
 "use strict";
 
+// const EvieCoinType = require("./types/EvieCoin").EvieCoin
+// const { EvieCoinInstance } = require("./types/EvieCoin");
+
+// @ts-ignore
 const EvieCoin = artifacts.require("./EvieCoin.sol");
 // const time = require("./utils/time");
 const { time } = require("@openzeppelin/test-helpers");
 
+const StudentType = {
+  FullStudent: "0",
+  PendingStudent: "1",
+  None: "2",
+};
+
+// declare var assert: any;
+
+// @ts-ignore
 contract("EvieCoin", function (accounts) {
   let [
     aliceOwner,
@@ -12,8 +25,9 @@ contract("EvieCoin", function (accounts) {
     badStudentJimbo,
   ] = accounts;
   let instance;
+  // TODO: get to work with the auto gen types
   before(async () => {
-    instance = await EvieCoin.deployed();
+    instance = (await EvieCoin.deployed());
 
     async function createStudent(studentAddr, supAddr = supervisorGeorge) {
       let result = await instance.getSupsPotentialStudents({
@@ -28,10 +42,18 @@ contract("EvieCoin", function (accounts) {
 
       const priorNumbStudents = result[0].length;
 
+      // Ensure that the student is None type
+      result = await instance.studentStatus({ from: studentAddr });
+      assert.equal(result.toString(), StudentType.None);
+
       result = await instance.createPotentialStudent(supAddr, {
         from: studentAddr,
       });
       assert.equal(result.receipt.status, true);
+
+      // Ensure that the student is Potential type
+      result = await instance.studentStatus({ from: studentAddr });
+      assert.equal(result.toString(), StudentType.PendingStudent);
 
       result = await instance.getSupsPotentialStudents({
         from: supAddr,
@@ -57,7 +79,20 @@ contract("EvieCoin", function (accounts) {
         studentAddr.toString(),
         result[0][priorNumbStudents].toString()
       );
+
+      // Ensure that the student is no longer pending for the sup
+      result = await instance.getSupsPotentialStudents({
+        from: supAddr,
+      });
+      potStudents = result[0];
+      inds = result[1];
+      assert.equal(potStudents.length, priorPotNumbStudents);
+
+      // Ensure that the student is Full type
+      result = await instance.studentStatus({ from: studentAddr });
+      assert.equal(result.toString(), StudentType.FullStudent);
     }
+
     await createStudent(goodStudentBob);
     await createStudent(badStudentJimbo);
   });

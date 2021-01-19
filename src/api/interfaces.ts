@@ -1,5 +1,13 @@
+import type { EvieCoin, } from "../types";
+
+export enum StudentStatus {
+  FullStudent,
+  PendingStudent,
+  None
+}
+
 export interface IAPIStore {
-  EvieCoin: any,
+  EvieCoin: EvieCoin,
   address: string
 }
 

@@ -10,7 +10,7 @@ const StudentInfoWriteable = writable({} as Partial<IStudentInfo>);
 export const APIStore = {
   subscribe: APIWriteable.subscribe,
   update: APIWriteable.update,
-  set: APIWriteable.set, 
+  set: APIWriteable.set,
 };
 
 export const StudentInfoStore = {

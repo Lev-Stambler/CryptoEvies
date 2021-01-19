@@ -10,6 +10,12 @@ contract StudentAndSup is Ownable {
     using SafeMath for uint256;
     using RArrAddress for address[];
 
+    enum StudentType {
+        FullStudent,
+        PendingStudent,
+        None
+    }
+
     ///@dev all initialized students
     address[] private students;
 
@@ -38,6 +44,17 @@ contract StudentAndSup is Ownable {
     }
 
     constructor() {}
+
+    /// @dev get whether the student is a pending potential student, initialized, or nothing at all 
+    function studentStatus() view public returns(StudentType) {
+        if (studentToSupervisor[msg.sender] != address(0)) {
+            return StudentType.FullStudent;
+        } else if (pendingStudentToApprovedSup[msg.sender] != address(0)) {
+            return StudentType.PendingStudent;
+        } else {
+            return StudentType.None;
+        }
+    }
 
     /// @param supervisor - The student's desired supervisor
     /// @dev msg.sender is the student's address

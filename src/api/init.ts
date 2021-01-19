@@ -1,4 +1,6 @@
 import EvieCoinContract from "../../build/contracts/EvieCoin.json";
+import { EvieCoin } from "../types";
+
 import {
   clockInListener,
   clockOutListener,
@@ -6,38 +8,38 @@ import {
 } from "./event-listeners";
 import { APIStore } from "./stores";
 
-export async function initEvieCoin(web3) {
-  const { EvieCoin, address } = await loadBlockchainData(web3);
+export async function initEvieCoin() {
+  const { EvieCoin, address } = await loadBlockchainData();
   await setEventListeners(EvieCoin, address);
 }
 
-async function loadBlockchainData(web3) {
+async function loadBlockchainData() {
   const accounts = (await window.ethereum.send("eth_requestAccounts")).result;
-  const networkId = await window.web3.eth.net.getId();
-  let address;
-  const evieCoinData = EvieCoinContract.networks[networkId];
-  let evieCoin;
-  if (evieCoinData) {
-    evieCoin = new web3.eth.Contract(
-      EvieCoinContract.abi,
-      evieCoinData.address
-    );
-    APIStore.set({
-      EvieCoin: evieCoin,
-      address: accounts[0],
-    });
-  } else {
-    window.alert("Evie Coin contract not deployed to detected network.");
-    throw "Evie Coin contract not deployed to detected network.";
-  }
+  const address = accounts[0];
+
+  const evieCoin: EvieCoin = (new window.web3.eth.Contract(
+    EvieCoinContract.abi,
+    address
+  ) as any) as EvieCoin;
+
+  APIStore.set({
+    EvieCoin: evieCoin,
+    address,
+  });
   return {
     EvieCoin: evieCoin,
     address,
   };
 }
 
-async function setEventListeners(evieCoin, address) {
-  evieCoin.events.ClockInTimeEvent({ user: address }, clockInListener);
-  evieCoin.events.ClockOutTimeEvent({ user: address }, clockOutListener);
-  evieCoin.events.PayoutMadeEvent({ _to: address }, payoutListener);
+async function setEventListeners(evieCoin: EvieCoin, address) {
+  evieCoin.events.ClockInTimeEvent(
+    { filter: { user: address } },
+    clockInListener
+  );
+  evieCoin.events.ClockOutTimeEvent(
+    { filter: { user: address } },
+    clockOutListener
+  );
+  evieCoin.events.PayoutMadeEvent({ filter: { _to: address } }, payoutListener);
 }
