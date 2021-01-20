@@ -1,5 +1,5 @@
 import EvieCoinContract from "../../build/contracts/EvieCoin.json";
-import { EvieCoin } from "../types";
+import type { EvieCoin } from "../types";
 
 import {
   clockInListener,
