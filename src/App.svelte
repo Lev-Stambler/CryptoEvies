@@ -17,6 +17,11 @@
       await initEvieCoin(instance)
     }
     connected = true;
+    APIStore.subscribe((store) => {
+      if (store.reloadPage) {
+        window.location.reload()
+      }
+    })
   });
 
   const routes = {
@@ -35,4 +40,11 @@
 </div>
 
 <style>
+  .container {
+    display: grid;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    height: 100%;
+  }
 </style>

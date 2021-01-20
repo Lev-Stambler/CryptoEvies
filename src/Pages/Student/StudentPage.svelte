@@ -4,9 +4,6 @@
   import { APIStore } from "../../api/stores";
   import { onMount } from "svelte";
   import {
-    loadBal,
-    loadInitClockIn,
-    loadInitClockOut,
     loadStudentType,
   } from "../../api/student";
   import { StudentStatus } from "../../api/interfaces";
@@ -16,12 +13,6 @@
   onMount(async () => {
     const { EvieCoin, address } = $APIStore;
     studentType = await loadStudentType(EvieCoin, address);
-    // const proms = [
-    //   loadInitClockIn(EvieCoin, address),
-    //   loadInitClockOut(EvieCoin, address),
-    //   loadBal(EvieCoin, address),
-    // ];
-    // await Promise.all(proms);
     connected = true;
   });
 </script>

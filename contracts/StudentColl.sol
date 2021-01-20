@@ -30,15 +30,20 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
         _;
     }
 
+    event PayoutMadeMultEvent(address indexed _to, uint256 numbToks);
     event PayoutMadeEvent(address indexed _to, uint256 tokId);
     event ClockInTimeEvent(address indexed user, uint256 timestamp);
-    event ClockOutTimeEvent(address indexed user, uint256 timestamp);
+    event ClockOutTimeEvent(address indexed user, uint256 timestamp, bool newPendingTok);
 
     constructor() ERC721("StudentColl", "STU") StudentAndSup() {
         transferOwnership(msg.sender);
     }
 
-    function getPendingCollectibles(address student) view external returns(uint256[] memory) {
+    function getPendingCollectibles(address student)
+        external
+        view
+        returns (uint256[] memory)
+    {
         return pendingCollectibleIds[student];
     }
 
@@ -53,18 +58,19 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
     function clockEndTime() public _is_student {
         uint256 end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
+        bool newPendingTok = false;
         if (end_time.sub(clock_in_times[msg.sender]) <= 1 hours) {
             // Payout one full coin
+            newPendingTok = true;
             _payout(msg.sender);
         }
-        emit ClockOutTimeEvent(msg.sender, block.timestamp);
+        emit ClockOutTimeEvent(msg.sender, block.timestamp, newPendingTok);
     }
 
     function _payout(address _to) private _is_student {
         _tokenIds.increment();
         uint256 newTokId = _tokenIds.current();
         pendingCollectibleIds[_to].push(newTokId);
-        emit PayoutMadeEvent(_to, newTokId);
     }
 
     function removeFromPending(address student, uint256 tokInd) internal {

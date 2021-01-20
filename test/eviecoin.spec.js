@@ -50,6 +50,7 @@ contract("EvieCoin", function (accounts) {
         from: studentAddr,
       });
       assert.equal(result.receipt.status, true);
+      assert.equal(result.logs[0].event, "StudentStatusChange", 'StudentStatusChange event should fire.');
 
       // Ensure that the student is Potential type
       result = await instance.studentStatus(studentAddr);
@@ -73,6 +74,7 @@ contract("EvieCoin", function (accounts) {
         }
       );
       assert.equal(result.receipt.status, true);
+      assert.equal(result.logs[0].event, "StudentStatusChange", 'StudentStatusChange event should fire.');
       result = await instance.getSupsStudents({ from: supAddr });
       assert.equal(result[0].length, priorNumbStudents + 1);
       assert.equal(

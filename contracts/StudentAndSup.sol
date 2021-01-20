@@ -16,6 +16,8 @@ contract StudentAndSup is Ownable {
         None
     }
 
+    event StudentStatusChange(address sup, address student);
+
     ///@dev all initialized students
     address[] private students;
 
@@ -78,6 +80,7 @@ contract StudentAndSup is Ownable {
         );
         pendingStudentToApprovedSup[msg.sender] = supervisor;
         pendingStudents.push(msg.sender);
+        emit StudentStatusChange(supervisor, msg.sender);
     }
 
     function potentialSupApproveStudent(uint256 pendingStudentInd) external {
@@ -100,6 +103,7 @@ contract StudentAndSup is Ownable {
         students.push(student);
         pendingStudents.removeInd(pendingStudentInd);
         delete pendingStudentToApprovedSup[student];
+        emit StudentStatusChange(msg.sender, student);
     }
 
     function getSupsStudents()
@@ -110,6 +114,8 @@ contract StudentAndSup is Ownable {
         return getStudentsPerSup(students, studentToSupervisor, msg.sender);
     }
 
+
+    /// @return the students' addresses, their index in the address array
     function getSupsPotentialStudents()
         external
         view

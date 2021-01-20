@@ -1,6 +1,7 @@
+import { wrap } from "svelte-spa-router";
 import { ethTimestampToDate } from "../env/time";
 import { weiToCoinNumber } from "../utils/currency";
-import { StudentInfoStore } from "./stores";
+import { APIStore, StudentInfoStore } from "./stores";
 
 function wrapper(f: Function) {
   return (err, event) => {
@@ -13,14 +14,16 @@ function wrapper(f: Function) {
 }
 
 function _clockOutListener(event) {
-  const { timestamp } = event.returnValues;
-  let endTime = ethTimestampToDate(timestamp);
-  StudentInfoStore.update((u) => {
-    return {
-      ...u,
-      endTime,
-    };
-  });
+  const { newPendingTok } = event.returnValues;
+  if (newPendingTok) {
+    alert('Congrats! You will get a new token if your supervisor approves this!')
+    APIStore.update((u) => {
+      return {
+        ...u,
+        reloadPage: true,
+      };
+    });
+  }
 }
 
 function _clockInListener(event) {
@@ -35,17 +38,27 @@ function _clockInListener(event) {
 }
 
 function _payoutListener(event) {
-  const valWei = event.returnValues.value
-  const value = weiToCoinNumber(valWei);
-  StudentInfoStore.update((u) => {
+  alert(`One of your tokens just got approved`);
+  APIStore.update((u) => {
     return {
       ...u,
-      bal: u.bal + valWei,
+      reloadPage: true,
     };
   });
-  alert(`You just got paid out ${value}`);
+}
+
+function _studentApprovalStatusChanged(event) {
+  APIStore.update((u) => {
+    return {
+      ...u,
+      reloadPage: true,
+    };
+  });
 }
 
 export const clockInListener = wrapper(_clockInListener);
 export const clockOutListener = wrapper(_clockOutListener);
 export const payoutListener = wrapper(_payoutListener);
+export const studentApprovalStatusChanged = wrapper(
+  _studentApprovalStatusChanged
+);

@@ -4,6 +4,7 @@ import type { IAPIStore, IStudentInfo } from "./interfaces";
 const APIWriteable = writable({
   EvieCoin: undefined,
   address: "",
+  reloadPage: false
 } as IAPIStore);
 const StudentInfoWriteable = writable({} as Partial<IStudentInfo>);
 

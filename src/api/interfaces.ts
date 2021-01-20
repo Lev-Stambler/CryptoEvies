@@ -8,11 +8,13 @@ export enum StudentStatus {
 
 export interface IAPIStore {
   EvieCoin: EvieCoin,
-  address: string
+  address: string,
+  reloadPage: boolean
 }
 
 export interface IStudentInfo {
-  bal: number;
+  approvedToks: number;
+  pendingToks: number;
   startTime: Date;
   endTime: Date;
   address: string;

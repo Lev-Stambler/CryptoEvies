@@ -5,6 +5,7 @@ import {
   clockInListener,
   clockOutListener,
   payoutListener,
+  studentApprovalStatusChanged,
 } from "./event-listeners";
 import { APIStore } from "./stores";
 
@@ -26,14 +27,17 @@ async function loadBlockchainData(web3) {
     APIStore.set({
       EvieCoin: evieCoin,
       address,
+      reloadPage: false,
     });
     return {
       EvieCoin: evieCoin,
       address,
     };
   } else {
-    alert("Please use a web3.js enabled browser and make sure that EvieCoin is loaded")
-    throw "Please use a web3.js enabled browser and make sure that EvieCoin is loaded"
+    alert(
+      "Please use a web3.js enabled browser and make sure that EvieCoin is loaded"
+    );
+    throw "Please use a web3.js enabled browser and make sure that EvieCoin is loaded";
   }
 }
 
@@ -47,4 +51,16 @@ async function setEventListeners(evieCoin: EvieCoin, address) {
     clockOutListener
   );
   evieCoin.events.PayoutMadeEvent({ filter: { _to: address } }, payoutListener);
+  evieCoin.events.PayoutMadeMultEvent(
+    { filter: { _to: address } },
+    payoutListener
+  );
+  evieCoin.events.StudentStatusChange(
+    { filter: { sup: address } },
+    studentApprovalStatusChanged
+  );
+  evieCoin.events.StudentStatusChange(
+    { filter: { student: address } },
+    studentApprovalStatusChanged
+  );
 }
