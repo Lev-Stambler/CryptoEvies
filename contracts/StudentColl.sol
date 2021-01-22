@@ -20,12 +20,15 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
     /// @dev the clock in time for an account on a given day
     mapping(address => uint256) public clock_in_times;
 
-    /// @dev check the last clock out day for working. Used to ensure that only one clock out is done per day
+    /// @dev check the last clock in day for working. Used to ensure that only one clock out is done per day
     mapping(address => uint16) private last_clock_in_day;
 
-    modifier _once_per_day() {
+    /// @dev check the last clock out day for working. Used to ensure that only one clock out is done per day
+    mapping(address => uint16) private last_clock_out_day;
+
+    modifier _once_per_day(mapping(address => uint16) storage last_time_map) {
         require(
-            uint16(block.timestamp.div(1 days)) > last_clock_in_day[msg.sender]
+            uint16(block.timestamp.div(1 days)) > last_time_map[msg.sender]
         );
         _;
     }
@@ -33,7 +36,11 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
     event PayoutMadeMultEvent(address indexed _to, uint256 numbToks);
     event PayoutMadeEvent(address indexed _to, uint256 tokId);
     event ClockInTimeEvent(address indexed user, uint256 timestamp);
-    event ClockOutTimeEvent(address indexed user, uint256 timestamp, bool newPendingTok);
+    event ClockOutTimeEvent(
+        address indexed user,
+        uint256 timestamp,
+        bool newPendingTok
+    );
 
     constructor() ERC721("StudentColl", "STU") StudentAndSup() {
         transferOwnership(msg.sender);
@@ -48,17 +55,26 @@ contract StudentColl is ERC721, Ownable, StudentAndSup {
     }
 
     /// @dev a user clocks in their start time
-    function clockStartTime() public _once_per_day _is_student {
+    function clockStartTime()
+        public
+        _once_per_day(last_clock_in_day)
+        _is_student
+    {
         clock_in_times[msg.sender] = block.timestamp;
         last_clock_in_day[msg.sender] = uint16(block.timestamp.div(1 days));
         emit ClockInTimeEvent(msg.sender, block.timestamp);
     }
 
     // Not exact, it is off by a few minutes?
-    function clockEndTime() public _is_student {
+    function clockEndTime()
+        public
+        _once_per_day(last_clock_out_day)
+        _is_student
+    {
         uint256 end_time = block.timestamp;
         require(end_time >= clock_in_times[msg.sender]);
         bool newPendingTok = false;
+        last_clock_out_day[msg.sender] = uint16(block.timestamp.div(1 days));
         if (end_time.sub(clock_in_times[msg.sender]) <= 1 hours) {
             // Payout one full coin
             newPendingTok = true;

@@ -1,6 +1,7 @@
 <script>
   import { APIStore } from "../../api/stores";
   import { Button } from "svelte-mui";
+  import { clockOutListener } from "../../api/event-listeners";
 
   async function getPendingStudents() {
     const pending = await $APIStore.EvieCoin.methods
@@ -16,6 +17,7 @@
     const pendingBalProms = curr[0].map((addr) =>
       $APIStore.EvieCoin.methods.getPendingCollectibles(addr).call()
     );
+    await addNewPendingTokListener(curr[0]);
     return { addrs: curr[0], addrsIdx: curr[1], pendingBalProms };
   }
 
@@ -41,6 +43,13 @@
     await $APIStore.EvieCoin.methods
       .SupervisorApproveAll(studAddr)
       .send({ from: $APIStore.address });
+  }
+
+  export async function addNewPendingTokListener(studentAddrs) {
+    $APIStore.EvieCoin.events.ClockOutTimeEvent(
+      { filter: { user: studentAddrs } },
+      clockOutListener
+    );
   }
 </script>
 

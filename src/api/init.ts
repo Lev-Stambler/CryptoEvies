@@ -16,6 +16,12 @@ export async function initEvieCoin(web3) {
 
 async function loadBlockchainData(web3) {
   const accounts = (await window.ethereum.send("eth_requestAccounts")).result;
+  let accountIdx = 0;
+  if (accounts.length > 1) {
+    accountIdx = parseInt(prompt(
+      `Looks like you have ${accounts.length} number accounts connected. From 1 to ${accounts.length}, which account would you like to connect?`, "1")
+    ) - 1;
+  }
   const address = accounts[0];
   const networkId = await window.web3.eth.net.getId();
   const evieCoinData = EvieCoinContract.networks[networkId];

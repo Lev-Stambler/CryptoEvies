@@ -19,6 +19,8 @@ CryptoEvies currently uses Svelte and TypeScript for its frontend and Solidity/ 
 
 ## Future considerations
 In the future I would like to:
+- Allow a supervisor to reject a pending student
+- Allow a supervisor to reject a pending token
 - Make Evie Tokens customizable and tradable (think CryptoKitties)
 - Have custom tasks put forth by the supervisor
 - Add integration with oracles which would connect to a Canvas or Google Classroom API.

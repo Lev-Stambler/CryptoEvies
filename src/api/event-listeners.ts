@@ -16,7 +16,6 @@ function wrapper(f: Function) {
 function _clockOutListener(event) {
   const { newPendingTok } = event.returnValues;
   if (newPendingTok) {
-    alert('Congrats! You will get a new token if your supervisor approves this!')
     APIStore.update((u) => {
       return {
         ...u,
@@ -38,7 +37,6 @@ function _clockInListener(event) {
 }
 
 function _payoutListener(event) {
-  alert(`One of your tokens just got approved`);
   APIStore.update((u) => {
     return {
       ...u,

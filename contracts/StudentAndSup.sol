@@ -16,7 +16,7 @@ contract StudentAndSup is Ownable {
         None
     }
 
-    event StudentStatusChange(address sup, address student);
+    event StudentStatusChange(address indexed sup, address indexed student);
 
     ///@dev all initialized students
     address[] private students;

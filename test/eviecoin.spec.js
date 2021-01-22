@@ -172,11 +172,17 @@ contract("EvieCoin", function (accounts) {
   });
 
   context("Check edge cases/ faulty sends", async () => {
+    xit("Only one clock in can be made per day", async () => {});
     xit("Only one clock out can be made per day", async () => {});
   });
 
   xcontext(
     "Check edge cases/ faulty case for student sup interaction",
-    async () => {}
+    async () => {
+      xit("Should make sure that an approved student cannot request a new supervisor", async () => {})
+      xit("Should make sure that a supervisor can only approve a requested student", async () => {})
+      // TODO: this is subject to change
+      xit("Should make sure that a pending student cannot change requested a supervisor")
+    }
   );
 });
